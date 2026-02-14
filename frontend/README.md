@@ -41,3 +41,5 @@ Audio sample pack:
 
 - Put files into `public/sounds/{kicks,snares,hats,bass,fx,melodies}`.
 - Supported extensions: `.wav`, `.mp3`, `.ogg`, `.m4a`.
+- To sync Lunatic pack from backend in one step, run:
+  `powershell -ExecutionPolicy Bypass -File frontend/scripts/sync-lunatic-to-frontend.ps1`

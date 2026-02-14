@@ -210,6 +210,9 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           patternDensity: clip.patternDensity,
           distortion: clip.distortion,
           fxChance: clip.fxChance,
+          lobbyId,
+          agentId: clip.agentId,
+          strategy: clip.strategy,
         });
 
         if (cancelled || !audioCtxRef.current) {
