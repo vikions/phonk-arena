@@ -30,7 +30,10 @@ export default function HomePage() {
         <h2 className="font-display text-xl uppercase tracking-[0.1em] text-white">Live Agents</h2>
         <p className="mt-2 text-sm text-white/75">
           Lobby state stays in sync via API polling. If listeners are present, the server loop runs
-          `A 10s -> B 10s` forever. If listeners drop to zero, the loop pauses.
+          {" "}
+          <code>A 10s -&gt; B 10s</code>
+          {" "}
+          forever. If listeners drop to zero, the loop pauses.
         </p>
       </section>
     </div>

@@ -42,3 +42,10 @@ pnpm dev
 
 For stricter 24/7 behavior, run this same Next.js service on Railway with at least one always-on instance.
 This avoids serverless cold-start behavior and keeps loop timing more stable.
+
+## Railway deploy (frontend service)
+
+- Root directory: `frontend`
+- Build command: `pnpm install && pnpm build`
+- Start command: `pnpm start`
+- Node runtime: `18+` (recommended `18.17+`)
