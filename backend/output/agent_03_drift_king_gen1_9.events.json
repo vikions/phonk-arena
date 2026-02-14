@@ -1,0 +1,774 @@
+{
+  "meta": {
+    "duration_seconds": 10.0,
+    "tempo_bpm": 94,
+    "bars_estimate": 3.92,
+    "sample_pack": "lunatic",
+    "sample_pack_found": true,
+    "melody_profile": "drift_night",
+    "available_packs": [
+      "core",
+      "lunatic"
+    ],
+    "dsp": {
+      "tempo_bpm": 94,
+      "sample_pack": "lunatic",
+      "melody_profile": "drift_night",
+      "style_root_hz": 41.2,
+      "drum_bus": {
+        "saturation_drive": 0.38,
+        "clip_threshold": 0.96
+      },
+      "bass_bus": {
+        "waveshaper_drive": 0.355,
+        "clip_threshold": 0.97,
+        "glide_probability": 0.3,
+        "glide_ms_range": [
+          80,
+          140
+        ]
+      },
+      "vocal_bus": {
+        "pitch_range_semitones": [
+          -6,
+          -3
+        ],
+        "room_reverb_chance": 0.22
+      },
+      "master": {
+        "soft_clip_drive": 0.328,
+        "limiter_threshold": 0.92
+      }
+    }
+  },
+  "events": [
+    {
+      "time": 0.0,
+      "instrument": "kick",
+      "velocity": 0.934,
+      "note": "C1"
+    },
+    {
+      "time": 0.0,
+      "instrument": "hihat_closed",
+      "velocity": 0.718,
+      "note": "F#2"
+    },
+    {
+      "time": 0.0,
+      "instrument": "808",
+      "velocity": 0.354,
+      "note": 41.2,
+      "duration": 3.0637,
+      "glide": false,
+      "glide_to": null,
+      "glide_ms": null,
+      "profile": "drift_night"
+    },
+    {
+      "time": 0.0,
+      "instrument": "melody",
+      "velocity": 0.633,
+      "note": 41.2,
+      "profile": "drift_night"
+    },
+    {
+      "time": 0.1596,
+      "instrument": "hihat_closed",
+      "velocity": 0.676,
+      "note": "F#2"
+    },
+    {
+      "time": 0.3191,
+      "instrument": "hihat_closed",
+      "velocity": 0.811,
+      "note": "F#2"
+    },
+    {
+      "time": 0.4787,
+      "instrument": "hihat_closed",
+      "velocity": 0.677,
+      "note": "F#2"
+    },
+    {
+      "time": 0.6383,
+      "instrument": "hihat_closed",
+      "velocity": 0.779,
+      "note": "F#2"
+    },
+    {
+      "time": 0.6383,
+      "instrument": "cowbell",
+      "velocity": 0.379,
+      "note": "F5"
+    },
+    {
+      "time": 0.6383,
+      "instrument": "vocal_chop",
+      "velocity": 0.693,
+      "note": "pitch_-3"
+    },
+    {
+      "time": 0.6383,
+      "instrument": "melody",
+      "velocity": 0.529,
+      "note": 55.0,
+      "profile": "drift_night"
+    },
+    {
+      "time": 0.718,
+      "instrument": "hihat_double",
+      "velocity": 0.557,
+      "note": "F#2"
+    },
+    {
+      "time": 0.7978,
+      "instrument": "hihat_closed",
+      "velocity": 0.653,
+      "note": "F#2"
+    },
+    {
+      "time": 0.9574,
+      "instrument": "kick",
+      "velocity": 0.741,
+      "note": "C1"
+    },
+    {
+      "time": 0.9574,
+      "instrument": "hihat_closed",
+      "velocity": 0.688,
+      "note": "F#2"
+    },
+    {
+      "time": 1.117,
+      "instrument": "snare_ghost",
+      "velocity": 0.39,
+      "note": "D2"
+    },
+    {
+      "time": 1.2766,
+      "instrument": "snare",
+      "velocity": 0.888,
+      "note": "D2"
+    },
+    {
+      "time": 1.2766,
+      "instrument": "hihat_closed",
+      "velocity": 0.638,
+      "note": "F#2"
+    },
+    {
+      "time": 1.5957,
+      "instrument": "hihat_closed",
+      "velocity": 0.608,
+      "note": "F#2"
+    },
+    {
+      "time": 1.5957,
+      "instrument": "melody",
+      "velocity": 0.636,
+      "note": 49.0,
+      "profile": "drift_night"
+    },
+    {
+      "time": 1.6755,
+      "instrument": "hihat_double",
+      "velocity": 0.463,
+      "note": "F#2"
+    },
+    {
+      "time": 1.7553,
+      "instrument": "hihat_closed",
+      "velocity": 0.846,
+      "note": "F#2"
+    },
+    {
+      "time": 1.9148,
+      "instrument": "cowbell",
+      "velocity": 0.576,
+      "note": "F5"
+    },
+    {
+      "time": 2.0744,
+      "instrument": "hihat_closed",
+      "velocity": 0.686,
+      "note": "F#2"
+    },
+    {
+      "time": 2.234,
+      "instrument": "hihat_closed",
+      "velocity": 0.657,
+      "note": "F#2"
+    },
+    {
+      "time": 2.234,
+      "instrument": "melody",
+      "velocity": 0.541,
+      "note": 49.0,
+      "profile": "drift_night"
+    },
+    {
+      "time": 2.3935,
+      "instrument": "hihat_closed",
+      "velocity": 0.755,
+      "note": "F#2"
+    },
+    {
+      "time": 2.4733,
+      "instrument": "hihat_double",
+      "velocity": 0.572,
+      "note": "F#2"
+    },
+    {
+      "time": 2.5531,
+      "instrument": "kick",
+      "velocity": 0.942,
+      "note": "C1"
+    },
+    {
+      "time": 2.5531,
+      "instrument": "hihat_closed",
+      "velocity": 0.797,
+      "note": "F#2"
+    },
+    {
+      "time": 2.5531,
+      "instrument": "808",
+      "velocity": 0.354,
+      "note": 41.2,
+      "duration": 3.0637,
+      "glide": true,
+      "glide_to": 41.2,
+      "glide_ms": 137.6,
+      "profile": "drift_night"
+    },
+    {
+      "time": 2.5531,
+      "instrument": "cowbell",
+      "velocity": 0.567,
+      "note": "F5"
+    },
+    {
+      "time": 2.5531,
+      "instrument": "melody",
+      "velocity": 0.623,
+      "note": 41.2,
+      "profile": "drift_night"
+    },
+    {
+      "time": 2.7127,
+      "instrument": "hihat_closed",
+      "velocity": 0.57,
+      "note": "F#2"
+    },
+    {
+      "time": 2.8722,
+      "instrument": "hihat_closed",
+      "velocity": 0.765,
+      "note": "F#2"
+    },
+    {
+      "time": 2.8722,
+      "instrument": "cowbell",
+      "velocity": 0.538,
+      "note": "F5"
+    },
+    {
+      "time": 3.0318,
+      "instrument": "hihat_closed",
+      "velocity": 0.815,
+      "note": "F#2"
+    },
+    {
+      "time": 3.1914,
+      "instrument": "hihat_closed",
+      "velocity": 0.592,
+      "note": "F#2"
+    },
+    {
+      "time": 3.1914,
+      "instrument": "cowbell",
+      "velocity": 0.472,
+      "note": "F5"
+    },
+    {
+      "time": 3.351,
+      "instrument": "hihat_closed",
+      "velocity": 0.774,
+      "note": "F#2"
+    },
+    {
+      "time": 3.351,
+      "instrument": "cowbell",
+      "velocity": 0.435,
+      "note": "F5"
+    },
+    {
+      "time": 3.5105,
+      "instrument": "kick",
+      "velocity": 0.885,
+      "note": "C1"
+    },
+    {
+      "time": 3.5105,
+      "instrument": "hihat_closed",
+      "velocity": 0.659,
+      "note": "F#2"
+    },
+    {
+      "time": 3.6701,
+      "instrument": "hihat_closed",
+      "velocity": 0.698,
+      "note": "F#2"
+    },
+    {
+      "time": 3.8297,
+      "instrument": "snare",
+      "velocity": 0.872,
+      "note": "D2"
+    },
+    {
+      "time": 3.8297,
+      "instrument": "hihat_closed",
+      "velocity": 0.598,
+      "note": "F#2"
+    },
+    {
+      "time": 3.8297,
+      "instrument": "vocal_chop",
+      "velocity": 0.463,
+      "note": "pitch_-5"
+    },
+    {
+      "time": 3.9892,
+      "instrument": "hihat_closed",
+      "velocity": 0.665,
+      "note": "F#2"
+    },
+    {
+      "time": 4.1488,
+      "instrument": "hihat_closed",
+      "velocity": 0.625,
+      "note": "F#2"
+    },
+    {
+      "time": 4.4679,
+      "instrument": "hihat_closed",
+      "velocity": 0.584,
+      "note": "F#2"
+    },
+    {
+      "time": 4.6275,
+      "instrument": "kick",
+      "velocity": 0.773,
+      "note": "C1"
+    },
+    {
+      "time": 4.6275,
+      "instrument": "hihat_closed",
+      "velocity": 0.781,
+      "note": "F#2"
+    },
+    {
+      "time": 4.7871,
+      "instrument": "hihat_closed",
+      "velocity": 0.597,
+      "note": "F#2"
+    },
+    {
+      "time": 4.7871,
+      "instrument": "melody",
+      "velocity": 0.506,
+      "note": 61.73,
+      "profile": "drift_night"
+    },
+    {
+      "time": 4.8668,
+      "instrument": "hihat_double",
+      "velocity": 0.462,
+      "note": "F#2"
+    },
+    {
+      "time": 4.9466,
+      "instrument": "hihat_closed",
+      "velocity": 0.842,
+      "note": "F#2"
+    },
+    {
+      "time": 5.1062,
+      "instrument": "kick",
+      "velocity": 0.842,
+      "note": "C1"
+    },
+    {
+      "time": 5.1062,
+      "instrument": "hihat_closed",
+      "velocity": 0.584,
+      "note": "F#2"
+    },
+    {
+      "time": 5.1062,
+      "instrument": "808",
+      "velocity": 0.354,
+      "note": 41.2,
+      "duration": 3.0637,
+      "glide": true,
+      "glide_to": 41.2,
+      "glide_ms": 91.1,
+      "profile": "drift_night"
+    },
+    {
+      "time": 5.1062,
+      "instrument": "cowbell",
+      "velocity": 0.657,
+      "note": "F5"
+    },
+    {
+      "time": 5.1062,
+      "instrument": "melody",
+      "velocity": 0.559,
+      "note": 49.0,
+      "profile": "drift_night"
+    },
+    {
+      "time": 5.4254,
+      "instrument": "hihat_closed",
+      "velocity": 0.622,
+      "note": "F#2"
+    },
+    {
+      "time": 5.5849,
+      "instrument": "hihat_closed",
+      "velocity": 0.574,
+      "note": "F#2"
+    },
+    {
+      "time": 5.7445,
+      "instrument": "hihat_closed",
+      "velocity": 0.843,
+      "note": "F#2"
+    },
+    {
+      "time": 5.7445,
+      "instrument": "cowbell",
+      "velocity": 0.449,
+      "note": "F5"
+    },
+    {
+      "time": 5.7445,
+      "instrument": "vocal_chop",
+      "velocity": 0.581,
+      "note": "pitch_-5"
+    },
+    {
+      "time": 5.7445,
+      "instrument": "melody",
+      "velocity": 0.618,
+      "note": 46.25,
+      "profile": "drift_night"
+    },
+    {
+      "time": 5.9041,
+      "instrument": "hihat_closed",
+      "velocity": 0.748,
+      "note": "F#2"
+    },
+    {
+      "time": 5.9041,
+      "instrument": "cowbell",
+      "velocity": 0.47,
+      "note": "F5"
+    },
+    {
+      "time": 6.0636,
+      "instrument": "kick",
+      "velocity": 0.768,
+      "note": "C1"
+    },
+    {
+      "time": 6.0636,
+      "instrument": "hihat_closed",
+      "velocity": 0.708,
+      "note": "F#2"
+    },
+    {
+      "time": 6.2232,
+      "instrument": "snare_ghost",
+      "velocity": 0.452,
+      "note": "D2"
+    },
+    {
+      "time": 6.3828,
+      "instrument": "snare",
+      "velocity": 0.88,
+      "note": "D2"
+    },
+    {
+      "time": 6.5423,
+      "instrument": "hihat_closed",
+      "velocity": 0.757,
+      "note": "F#2"
+    },
+    {
+      "time": 6.7019,
+      "instrument": "hihat_closed",
+      "velocity": 0.752,
+      "note": "F#2"
+    },
+    {
+      "time": 6.702,
+      "instrument": "melody",
+      "velocity": 0.622,
+      "note": 41.2,
+      "profile": "drift_night"
+    },
+    {
+      "time": 6.8615,
+      "instrument": "cowbell",
+      "velocity": 0.572,
+      "note": "F5"
+    },
+    {
+      "time": 6.8615,
+      "instrument": "vocal_chop",
+      "velocity": 0.618,
+      "note": "pitch_-4"
+    },
+    {
+      "time": 7.021,
+      "instrument": "hihat_closed",
+      "velocity": 0.624,
+      "note": "F#2"
+    },
+    {
+      "time": 7.1008,
+      "instrument": "hihat_double",
+      "velocity": 0.408,
+      "note": "F#2"
+    },
+    {
+      "time": 7.1806,
+      "instrument": "hihat_closed",
+      "velocity": 0.727,
+      "note": "F#2"
+    },
+    {
+      "time": 7.1806,
+      "instrument": "cowbell",
+      "velocity": 0.467,
+      "note": "F5"
+    },
+    {
+      "time": 7.2604,
+      "instrument": "hihat_double",
+      "velocity": 0.56,
+      "note": "F#2"
+    },
+    {
+      "time": 7.3402,
+      "instrument": "hihat_closed",
+      "velocity": 0.57,
+      "note": "F#2"
+    },
+    {
+      "time": 7.3402,
+      "instrument": "cowbell",
+      "velocity": 0.693,
+      "note": "F5"
+    },
+    {
+      "time": 7.3402,
+      "instrument": "melody",
+      "velocity": 0.493,
+      "note": 41.2,
+      "profile": "drift_night"
+    },
+    {
+      "time": 7.42,
+      "instrument": "hihat_double",
+      "velocity": 0.403,
+      "note": "F#2"
+    },
+    {
+      "time": 7.4998,
+      "instrument": "hihat_closed",
+      "velocity": 0.634,
+      "note": "F#2"
+    },
+    {
+      "time": 7.4998,
+      "instrument": "cowbell",
+      "velocity": 0.505,
+      "note": "F5"
+    },
+    {
+      "time": 7.6593,
+      "instrument": "kick",
+      "velocity": 0.778,
+      "note": "C1"
+    },
+    {
+      "time": 7.6593,
+      "instrument": "hihat_closed",
+      "velocity": 0.748,
+      "note": "F#2"
+    },
+    {
+      "time": 7.6593,
+      "instrument": "808",
+      "velocity": 0.354,
+      "note": 41.2,
+      "duration": 3.0637,
+      "glide": false,
+      "glide_to": null,
+      "glide_ms": null,
+      "profile": "drift_night"
+    },
+    {
+      "time": 7.6593,
+      "instrument": "vocal_chop",
+      "velocity": 0.647,
+      "note": "pitch_-4"
+    },
+    {
+      "time": 7.6593,
+      "instrument": "melody",
+      "velocity": 0.478,
+      "note": 46.25,
+      "profile": "drift_night"
+    },
+    {
+      "time": 7.8189,
+      "instrument": "hihat_closed",
+      "velocity": 0.809,
+      "note": "F#2"
+    },
+    {
+      "time": 7.8987,
+      "instrument": "hihat_double",
+      "velocity": 0.616,
+      "note": "F#2"
+    },
+    {
+      "time": 7.9785,
+      "instrument": "hihat_closed",
+      "velocity": 0.568,
+      "note": "F#2"
+    },
+    {
+      "time": 7.9785,
+      "instrument": "cowbell",
+      "velocity": 0.681,
+      "note": "F5"
+    },
+    {
+      "time": 8.138,
+      "instrument": "hihat_closed",
+      "velocity": 0.583,
+      "note": "F#2"
+    },
+    {
+      "time": 8.2976,
+      "instrument": "hihat_closed",
+      "velocity": 0.592,
+      "note": "F#2"
+    },
+    {
+      "time": 8.2976,
+      "instrument": "cowbell",
+      "velocity": 0.363,
+      "note": "F5"
+    },
+    {
+      "time": 8.4572,
+      "instrument": "hihat_closed",
+      "velocity": 0.812,
+      "note": "F#2"
+    },
+    {
+      "time": 8.5369,
+      "instrument": "hihat_double",
+      "velocity": 0.64,
+      "note": "F#2"
+    },
+    {
+      "time": 8.7763,
+      "instrument": "hihat_closed",
+      "velocity": 0.746,
+      "note": "F#2"
+    },
+    {
+      "time": 8.7763,
+      "instrument": "hihat_open",
+      "velocity": 0.601,
+      "note": "A#2"
+    },
+    {
+      "time": 8.9359,
+      "instrument": "snare",
+      "velocity": 0.896,
+      "note": "D2"
+    },
+    {
+      "time": 8.9359,
+      "instrument": "hihat_closed",
+      "velocity": 0.621,
+      "note": "F#2"
+    },
+    {
+      "time": 8.9359,
+      "instrument": "cowbell",
+      "velocity": 0.478,
+      "note": "F5"
+    },
+    {
+      "time": 9.0954,
+      "instrument": "hihat_closed",
+      "velocity": 0.809,
+      "note": "F#2"
+    },
+    {
+      "time": 9.255,
+      "instrument": "hihat_closed",
+      "velocity": 0.551,
+      "note": "F#2"
+    },
+    {
+      "time": 9.4146,
+      "instrument": "cowbell",
+      "velocity": 0.475,
+      "note": "F5"
+    },
+    {
+      "time": 9.5741,
+      "instrument": "hihat_closed",
+      "velocity": 0.636,
+      "note": "F#2"
+    },
+    {
+      "time": 9.7337,
+      "instrument": "hihat_closed",
+      "velocity": 0.785,
+      "note": "F#2"
+    },
+    {
+      "time": 9.8933,
+      "instrument": "hihat_closed",
+      "velocity": 0.607,
+      "note": "F#2"
+    },
+    {
+      "time": 9.8933,
+      "instrument": "vocal_chop",
+      "velocity": 0.775,
+      "note": "pitch_-4"
+    },
+    {
+      "time": 9.8934,
+      "instrument": "melody",
+      "velocity": 0.654,
+      "note": 61.73,
+      "profile": "drift_night"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "C:\\Users\\plamb\\phonk-arena\\contracts\\contracts\\PhonkArenaResults.sol": {
+      "lastModificationDate": 1771088337304,
+      "contentHash": "0d22c9c8914b213bf7d9f91f95686934",
+      "sourceName": "contracts/PhonkArenaResults.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "PhonkArenaResults"
+      ]
+    }
+  }
+}

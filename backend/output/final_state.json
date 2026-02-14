@@ -1,0 +1,82 @@
+{
+  "agent_01": {
+    "id": "agent_01",
+    "name": "Bass Demon",
+    "description": "Heavy 808s, minimal melody, pure power",
+    "generation": 6,
+    "dna": {
+      "bass_intensity": 0.8919635836766677,
+      "cowbell_frequency": 0.5841037860666237,
+      "vocal_chop_style": "aggressive",
+      "tempo": 144,
+      "melody_complexity": 0.5262319743582617,
+      "effects": [
+        "delay"
+      ],
+      "hi_hat_density": 0.87930434704092,
+      "swing": 0.12755878348301156,
+      "sample_variation": 0.5666030397476838
+    },
+    "stats": {
+      "total_battles": 5,
+      "wins": 4,
+      "total_likes": 176,
+      "win_rate": 0.8,
+      "avg_likes_per_track": 35.2
+    }
+  },
+  "agent_02": {
+    "id": "agent_02",
+    "name": "Memphis Soul",
+    "description": "Vocal samples, melodic, nostalgic",
+    "generation": 6,
+    "dna": {
+      "bass_intensity": 0.7208237303948116,
+      "cowbell_frequency": 0.0,
+      "vocal_chop_style": "dark",
+      "tempo": 147,
+      "melody_complexity": 1.0,
+      "effects": [
+        "reverb_hall",
+        "vinyl_crackle",
+        "pitch_shift"
+      ],
+      "hi_hat_density": 0.0,
+      "swing": 0.0,
+      "sample_variation": 1.0
+    },
+    "stats": {
+      "total_battles": 5,
+      "wins": 1,
+      "total_likes": 111,
+      "win_rate": 0.2,
+      "avg_likes_per_track": 22.2
+    }
+  },
+  "agent_03": {
+    "id": "agent_03",
+    "name": "Drift King",
+    "description": "Balanced aggression, high energy",
+    "generation": 6,
+    "dna": {
+      "bass_intensity": 0.0,
+      "cowbell_frequency": 0.4064353405729107,
+      "vocal_chop_style": "minimal",
+      "tempo": 135,
+      "melody_complexity": 0.03871015855746803,
+      "effects": [
+        "reverb_light"
+      ],
+      "hi_hat_density": 0.30558937452279267,
+      "swing": 0.18574654436833316,
+      "sample_variation": 1.0
+    },
+    "stats": {
+      "total_battles": 5,
+      "wins": 0,
+      "total_likes": 106,
+      "win_rate": 0.0,
+      "avg_likes_per_track": 21.2
+    }
+  }
+}

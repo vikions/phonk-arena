@@ -1,0 +1,472 @@
+{
+  "meta": {
+    "duration_seconds": 10.0,
+    "tempo_bpm": 88,
+    "bars_estimate": 3.67,
+    "sample_pack": "bandlab",
+    "sample_pack_found": false,
+    "melody_profile": "memphis_classic",
+    "available_packs": [
+      "core"
+    ],
+    "dsp": {
+      "tempo_bpm": 88,
+      "sample_pack": "bandlab",
+      "melody_profile": "memphis_classic",
+      "style_root_hz": 49.0,
+      "drum_bus": {
+        "saturation_drive": 0.52,
+        "clip_threshold": 0.96
+      },
+      "bass_bus": {
+        "waveshaper_drive": 0.46,
+        "clip_threshold": 0.97,
+        "glide_probability": 0.1,
+        "glide_ms_range": [
+          80,
+          140
+        ]
+      },
+      "vocal_bus": {
+        "pitch_range_semitones": [
+          -6,
+          -3
+        ],
+        "room_reverb_chance": 0.22
+      },
+      "master": {
+        "soft_clip_drive": 0.45,
+        "limiter_threshold": 0.92
+      }
+    }
+  },
+  "events": [
+    {
+      "time": 0.0,
+      "instrument": "kick",
+      "velocity": 0.926,
+      "note": "C1"
+    },
+    {
+      "time": 0.0,
+      "instrument": "808",
+      "velocity": 0.2,
+      "note": 49.0,
+      "duration": 3.2727,
+      "glide": false,
+      "glide_to": null,
+      "glide_ms": null,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 0.0,
+      "instrument": "vocal_chop",
+      "velocity": 0.684,
+      "note": "pitch_-3"
+    },
+    {
+      "time": 0.1705,
+      "instrument": "hihat_closed",
+      "velocity": 0.787,
+      "note": "F#2"
+    },
+    {
+      "time": 0.1705,
+      "instrument": "cowbell",
+      "velocity": 0.447,
+      "note": "F5"
+    },
+    {
+      "time": 0.2557,
+      "instrument": "hihat_double",
+      "velocity": 0.583,
+      "note": "F#2"
+    },
+    {
+      "time": 1.0227,
+      "instrument": "vocal_chop",
+      "velocity": 0.769,
+      "note": "pitch_-4"
+    },
+    {
+      "time": 1.1932,
+      "instrument": "kick",
+      "velocity": 0.894,
+      "note": "C1"
+    },
+    {
+      "time": 1.3636,
+      "instrument": "snare",
+      "velocity": 0.977,
+      "note": "D2"
+    },
+    {
+      "time": 1.3636,
+      "instrument": "hihat_closed",
+      "velocity": 0.62,
+      "note": "F#2"
+    },
+    {
+      "time": 1.3636,
+      "instrument": "melody",
+      "velocity": 0.525,
+      "note": 49.0,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 1.4488,
+      "instrument": "hihat_double",
+      "velocity": 0.496,
+      "note": "F#2"
+    },
+    {
+      "time": 1.875,
+      "instrument": "hihat_closed",
+      "velocity": 0.569,
+      "note": "F#2"
+    },
+    {
+      "time": 2.0454,
+      "instrument": "cowbell",
+      "velocity": 0.446,
+      "note": "F5"
+    },
+    {
+      "time": 2.2159,
+      "instrument": "hihat_closed",
+      "velocity": 0.672,
+      "note": "F#2"
+    },
+    {
+      "time": 2.5568,
+      "instrument": "hihat_closed",
+      "velocity": 0.698,
+      "note": "F#2"
+    },
+    {
+      "time": 2.5568,
+      "instrument": "hihat_open",
+      "velocity": 0.68,
+      "note": "A#2"
+    },
+    {
+      "time": 2.642,
+      "instrument": "hihat_double",
+      "velocity": 0.559,
+      "note": "F#2"
+    },
+    {
+      "time": 2.7273,
+      "instrument": "kick",
+      "velocity": 0.821,
+      "note": "C1"
+    },
+    {
+      "time": 2.7273,
+      "instrument": "808",
+      "velocity": 0.2,
+      "note": 49.0,
+      "duration": 3.2727,
+      "glide": false,
+      "glide_to": null,
+      "glide_ms": null,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 3.2386,
+      "instrument": "hihat_closed",
+      "velocity": 0.757,
+      "note": "F#2"
+    },
+    {
+      "time": 3.2386,
+      "instrument": "cowbell",
+      "velocity": 0.609,
+      "note": "F5"
+    },
+    {
+      "time": 3.4091,
+      "instrument": "hihat_closed",
+      "velocity": 0.621,
+      "note": "F#2"
+    },
+    {
+      "time": 3.5795,
+      "instrument": "cowbell",
+      "velocity": 0.536,
+      "note": "F5"
+    },
+    {
+      "time": 3.75,
+      "instrument": "hihat_closed",
+      "velocity": 0.821,
+      "note": "F#2"
+    },
+    {
+      "time": 3.9204,
+      "instrument": "hihat_closed",
+      "velocity": 0.633,
+      "note": "F#2"
+    },
+    {
+      "time": 4.0909,
+      "instrument": "snare",
+      "velocity": 0.939,
+      "note": "D2"
+    },
+    {
+      "time": 4.0909,
+      "instrument": "melody",
+      "velocity": 0.479,
+      "note": 49.0,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 4.2613,
+      "instrument": "snare_ghost",
+      "velocity": 0.461,
+      "note": "D2"
+    },
+    {
+      "time": 4.2613,
+      "instrument": "hihat_closed",
+      "velocity": 0.614,
+      "note": "F#2"
+    },
+    {
+      "time": 4.6022,
+      "instrument": "hihat_closed",
+      "velocity": 0.65,
+      "note": "F#2"
+    },
+    {
+      "time": 4.9432,
+      "instrument": "hihat_closed",
+      "velocity": 0.799,
+      "note": "F#2"
+    },
+    {
+      "time": 5.1136,
+      "instrument": "melody",
+      "velocity": 0.473,
+      "note": 65.41,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 5.4545,
+      "instrument": "kick",
+      "velocity": 0.863,
+      "note": "C1"
+    },
+    {
+      "time": 5.4545,
+      "instrument": "808",
+      "velocity": 0.2,
+      "note": 87.31,
+      "duration": 3.2727,
+      "glide": false,
+      "glide_to": null,
+      "glide_ms": null,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 5.4545,
+      "instrument": "cowbell",
+      "velocity": 0.379,
+      "note": "F5"
+    },
+    {
+      "time": 5.7954,
+      "instrument": "hihat_closed",
+      "velocity": 0.81,
+      "note": "F#2"
+    },
+    {
+      "time": 5.7954,
+      "instrument": "vocal_chop",
+      "velocity": 0.623,
+      "note": "pitch_-3"
+    },
+    {
+      "time": 5.9659,
+      "instrument": "hihat_closed",
+      "velocity": 0.787,
+      "note": "F#2"
+    },
+    {
+      "time": 6.1363,
+      "instrument": "hihat_closed",
+      "velocity": 0.63,
+      "note": "F#2"
+    },
+    {
+      "time": 6.3068,
+      "instrument": "hihat_closed",
+      "velocity": 0.584,
+      "note": "F#2"
+    },
+    {
+      "time": 6.392,
+      "instrument": "hihat_double",
+      "velocity": 0.424,
+      "note": "F#2"
+    },
+    {
+      "time": 6.4772,
+      "instrument": "kick",
+      "velocity": 0.787,
+      "note": "C1"
+    },
+    {
+      "time": 6.4772,
+      "instrument": "hihat_closed",
+      "velocity": 0.728,
+      "note": "F#2"
+    },
+    {
+      "time": 6.4772,
+      "instrument": "vocal_chop",
+      "velocity": 0.707,
+      "note": "pitch_-3"
+    },
+    {
+      "time": 6.6477,
+      "instrument": "hihat_closed",
+      "velocity": 0.735,
+      "note": "F#2"
+    },
+    {
+      "time": 6.8181,
+      "instrument": "snare",
+      "velocity": 0.977,
+      "note": "D2"
+    },
+    {
+      "time": 6.8181,
+      "instrument": "cowbell",
+      "velocity": 0.587,
+      "note": "F5"
+    },
+    {
+      "time": 6.8181,
+      "instrument": "melody",
+      "velocity": 0.555,
+      "note": 65.41,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 6.9886,
+      "instrument": "hihat_closed",
+      "velocity": 0.743,
+      "note": "F#2"
+    },
+    {
+      "time": 7.0738,
+      "instrument": "hihat_double",
+      "velocity": 0.609,
+      "note": "F#2"
+    },
+    {
+      "time": 7.3295,
+      "instrument": "hihat_closed",
+      "velocity": 0.582,
+      "note": "F#2"
+    },
+    {
+      "time": 7.5,
+      "instrument": "hihat_closed",
+      "velocity": 0.82,
+      "note": "F#2"
+    },
+    {
+      "time": 7.6704,
+      "instrument": "hihat_closed",
+      "velocity": 0.588,
+      "note": "F#2"
+    },
+    {
+      "time": 7.8409,
+      "instrument": "cowbell",
+      "velocity": 0.422,
+      "note": "F5"
+    },
+    {
+      "time": 8.1818,
+      "instrument": "kick",
+      "velocity": 0.841,
+      "note": "C1"
+    },
+    {
+      "time": 8.1818,
+      "instrument": "808",
+      "velocity": 0.2,
+      "note": 87.31,
+      "duration": 3.2727,
+      "glide": false,
+      "glide_to": null,
+      "glide_ms": null,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 8.1818,
+      "instrument": "melody",
+      "velocity": 0.517,
+      "note": 58.27,
+      "profile": "memphis_classic"
+    },
+    {
+      "time": 8.3522,
+      "instrument": "hihat_closed",
+      "velocity": 0.798,
+      "note": "F#2"
+    },
+    {
+      "time": 8.6931,
+      "instrument": "hihat_closed",
+      "velocity": 0.644,
+      "note": "F#2"
+    },
+    {
+      "time": 8.6931,
+      "instrument": "cowbell",
+      "velocity": 0.524,
+      "note": "F5"
+    },
+    {
+      "time": 9.2045,
+      "instrument": "kick",
+      "velocity": 0.823,
+      "note": "C1"
+    },
+    {
+      "time": 9.3749,
+      "instrument": "snare_ghost",
+      "velocity": 0.423,
+      "note": "D2"
+    },
+    {
+      "time": 9.3749,
+      "instrument": "hihat_closed",
+      "velocity": 0.576,
+      "note": "F#2"
+    },
+    {
+      "time": 9.5454,
+      "instrument": "snare",
+      "velocity": 0.947,
+      "note": "D2"
+    },
+    {
+      "time": 9.5454,
+      "instrument": "hihat_closed",
+      "velocity": 0.589,
+      "note": "F#2"
+    },
+    {
+      "time": 9.6306,
+      "instrument": "hihat_double",
+      "velocity": 0.479,
+      "note": "F#2"
+    }
+  ]
+}

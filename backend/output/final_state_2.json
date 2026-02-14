@@ -1,0 +1,98 @@
+{
+  "agent_01": {
+    "id": "agent_01",
+    "name": "Bass Demon",
+    "description": "Heavy 808s, minimal melody, pure power",
+    "generation": 6,
+    "dna": {
+      "bass_intensity": 0.8367865309138557,
+      "cowbell_frequency": 0.22392383803957153,
+      "vocal_chop_style": "aggressive",
+      "tempo": 146,
+      "melody_complexity": 0.08964899583439084,
+      "effects": [
+        "distortion_heavy",
+        "sidechain_hard"
+      ],
+      "hi_hat_density": 0.42118481266124913,
+      "swing": 0.20377183007631827,
+      "sample_variation": 0.6061540296377024,
+      "glide_probability": 0.7149288378613927,
+      "darkness": 0.9704958939431139,
+      "distortion_drive": 0.9473422844607262,
+      "vocal_pitch_down": -6
+    },
+    "stats": {
+      "total_battles": 5,
+      "wins": 3,
+      "total_likes": 193,
+      "win_rate": 0.6,
+      "avg_likes_per_track": 38.6
+    }
+  },
+  "agent_02": {
+    "id": "agent_02",
+    "name": "Memphis Soul",
+    "description": "Vocal samples, melodic, nostalgic",
+    "generation": 6,
+    "dna": {
+      "bass_intensity": 0.5496036117314592,
+      "cowbell_frequency": 0.779466294697161,
+      "vocal_chop_style": "dark",
+      "tempo": 127,
+      "melody_complexity": 0.529235492750451,
+      "effects": [
+        "reverb_light",
+        "vinyl_crackle",
+        "delay"
+      ],
+      "hi_hat_density": 0.6568200371473527,
+      "swing": 0.0,
+      "sample_variation": 0.90511685982346,
+      "glide_probability": 0.7036658117462613,
+      "darkness": 0.0,
+      "distortion_drive": 0.6854698479019932,
+      "vocal_pitch_down": -6
+    },
+    "stats": {
+      "total_battles": 5,
+      "wins": 1,
+      "total_likes": 93,
+      "win_rate": 0.2,
+      "avg_likes_per_track": 18.6
+    }
+  },
+  "agent_03": {
+    "id": "agent_03",
+    "name": "Drift King",
+    "description": "Balanced aggression, high energy",
+    "generation": 6,
+    "dna": {
+      "bass_intensity": 0.9389065497561632,
+      "cowbell_frequency": 1.0,
+      "vocal_chop_style": "minimal",
+      "tempo": 151,
+      "melody_complexity": 0.0,
+      "effects": [
+        "pitch_shift",
+        "delay",
+        "vinyl_crackle",
+        "distortion_light"
+      ],
+      "hi_hat_density": 1.0,
+      "swing": 0.1304689935104373,
+      "sample_variation": 0.872490784160207,
+      "glide_probability": 0.0874113601997335,
+      "darkness": 0.8223400246275206,
+      "distortion_drive": 0.34692151292404017,
+      "vocal_pitch_down": -7
+    },
+    "stats": {
+      "total_battles": 5,
+      "wins": 1,
+      "total_likes": 172,
+      "win_rate": 0.2,
+      "avg_likes_per_track": 34.4
+    }
+  }
+}
