@@ -21,7 +21,7 @@ export const LOBBY_CONFIGS: Record<LobbyId, LobbyConfig> = {
     parameters: {
       mutationSensitivity: 0.62,
       intensityRange: { min: 0.62, max: 0.98 },
-      bpmBias: 16,
+      bpmBias: 6,
       chaosRate: 0.12,
       styleBias: 0.75,
       densityBias: 0.2,
@@ -46,7 +46,7 @@ export const LOBBY_CONFIGS: Record<LobbyId, LobbyConfig> = {
     parameters: {
       mutationSensitivity: 0.38,
       intensityRange: { min: 0.28, max: 0.72 },
-      bpmBias: -10,
+      bpmBias: -8,
       chaosRate: 0.08,
       styleBias: -0.72,
       densityBias: -0.16,
@@ -71,7 +71,7 @@ export const LOBBY_CONFIGS: Record<LobbyId, LobbyConfig> = {
     parameters: {
       mutationSensitivity: 0.86,
       intensityRange: { min: 0.35, max: 0.95 },
-      bpmBias: 4,
+      bpmBias: 1,
       chaosRate: 0.45,
       styleBias: 0,
       densityBias: 0.3,

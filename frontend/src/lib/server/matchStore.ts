@@ -562,17 +562,17 @@ function computeClipPlan(state: StoredLobbyState, agent: RuntimeAgent, clipIndex
     ),
   );
 
-  const baseBpm = style === "HARD" ? 156 : 138;
+  const baseBpm = style === "HARD" ? 124 : 106;
   const bpm = round1(
     clamp(
       baseBpm +
         lobby.parameters.bpmBias +
-        intensity * 22 +
-        mutationLevel * 11 +
-        (agent.tempoPressure - 0.5) * 18 +
-        (rand() - 0.5) * 4,
-      110,
-      190,
+        intensity * 12 +
+        mutationLevel * 7 +
+        (agent.tempoPressure - 0.5) * 10 +
+        (rand() - 0.5) * 3,
+      84,
+      148,
     ),
   );
 

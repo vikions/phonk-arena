@@ -688,12 +688,14 @@ export async function renderPhonkClip({
     1,
   );
 
-  const lobbyBpmBias = lobbyId === "drift-hard" ? 8 : lobbyId === "soft-night" ? -9 : 2;
+  const lobbyBpmBias = lobbyId === "drift-hard" ? 4 : lobbyId === "soft-night" ? -6 : 1;
   const targetBpm =
     bpm ??
     (style === "HARD"
       ? 154 + drive * 18 + mutation * 10 + lobbyBpmBias
       : 136 + drive * 12 + mutation * 8 + lobbyBpmBias);
+
+  const grooveBpm = clamp(targetBpm * (style === "HARD" ? 0.78 : 0.74), 72, 126);
 
   const sampleRate = 44_100;
   const totalFrames = Math.max(1, Math.floor(sampleRate * durationSec));
@@ -743,7 +745,7 @@ export async function renderPhonkClip({
   drumsPan.connect(master);
 
   const hatsBus = context.createGain();
-  hatsBus.gain.value = (0.84 + density * 0.32) * profile.gainSkew.hats;
+  hatsBus.gain.value = (0.62 + density * 0.24) * profile.gainSkew.hats;
 
   const hatsFilter = context.createBiquadFilter();
   hatsFilter.type = "highpass";
@@ -773,7 +775,7 @@ export async function renderPhonkClip({
   texture.connect(texturePan);
   texturePan.connect(master);
 
-  const baseStep = (60 / targetBpm) / 4;
+  const baseStep = (60 / grooveBpm) / 2;
   const steps = Math.floor(durationSec / baseStep);
 
   const rootPool = style === "HARD" ? profile.rootPoolHard : profile.rootPoolSoft;
@@ -795,7 +797,11 @@ export async function renderPhonkClip({
 
     const kickProb = clamp(profile.kickPattern[barStep] * (0.52 + density * 0.62 + drive * 0.28), 0.03, 0.99);
     const snareProb = clamp(profile.snarePattern[barStep] * (0.55 + density * 0.46 + mutation * 0.16), 0.03, 0.99);
-    const hatProb = clamp(profile.hatPattern[barStep] * (0.58 + density * 0.74 + mutation * 0.15), 0.06, 0.99);
+    const hatProb = clamp(
+      profile.hatPattern[barStep] * (0.32 + density * 0.48 + mutation * 0.08),
+      0.04,
+      0.9,
+    );
 
     if (seededRand() < kickProb) {
       const kick = pickBuffer(kickPool, seededRand, "kicks", pickState);
@@ -856,13 +862,13 @@ export async function renderPhonkClip({
         scheduleFallbackHat(context, hatsBus, t, seededRand);
       }
 
-      if ((barStep === 7 || barStep === 15) && seededRand() < 0.3 + mutation * 0.25) {
+      if ((barStep === 7 || barStep === 15) && seededRand() < 0.12 + mutation * 0.1) {
         const stutterOffset = baseStep * (0.2 + seededRand() * 0.18);
         if (t + stutterOffset < durationSec) {
           if (hat) {
             scheduleBuffer(context, hatsBus, hat, t + stutterOffset, {
               gain: (0.12 + drive * 0.12) * profile.gainSkew.hats,
-              playbackRate: clamp(1.15 + seededRand() * 0.35, 0.75, 2.2),
+              playbackRate: clamp(1 + seededRand() * 0.2, 0.75, 1.5),
               attack: 0.001,
               release: 0.04,
               maxDuration: 0.07,
@@ -935,12 +941,12 @@ export async function renderPhonkClip({
       }
     }
 
-    if (lobbyId === "chaos-lab" && seededRand() < 0.06 + mutation * 0.14) {
+    if (lobbyId === "chaos-lab" && seededRand() < 0.03 + mutation * 0.08) {
       const chaosHit = pickBuffer(melodyPool, seededRand, "melodies", pickState);
       if (chaosHit) {
         scheduleBuffer(context, texture, chaosHit, t + baseStep * 0.12, {
           gain: (0.15 + mutation * 0.2) * profile.gainSkew.melodies,
-          playbackRate: clamp(1.25 + seededRand() * 0.6, 0.6, 2.2),
+          playbackRate: clamp(1.05 + seededRand() * 0.35, 0.6, 1.7),
           attack: 0.001,
           release: baseStep * 1.2,
           maxDuration: baseStep * 1.7,
