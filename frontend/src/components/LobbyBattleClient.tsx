@@ -184,17 +184,34 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   }
 
   useEffect(() => {
+    if (audioEnabled) {
+      return;
+    }
+
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new AudioContext();
+    }
+
+    void audioCtxRef.current
+      .resume()
+      .then(() => {
+        setAudioEnabled(true);
+      })
+      .catch(() => {
+        // Browser blocked autoplay; user can unlock manually.
+      });
+  }, [audioEnabled]);
+
+  useEffect(() => {
     if (!audioEnabled || !match?.nowPlaying) {
       return;
     }
 
     const clip = match.nowPlaying;
-
-    if (lastPlayedClipIdRef.current === clip.clipId) {
+    const clipId = clip.clipId;
+    if (lastPlayedClipIdRef.current === clipId) {
       return;
     }
-
-    lastPlayedClipIdRef.current = clip.clipId;
 
     let cancelled = false;
 
@@ -232,6 +249,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         source.connect(gain);
         gain.connect(context.destination);
         source.start();
+        lastPlayedClipIdRef.current = clipId;
       } catch {
         setUiMessage("Sample pack not available for this clip. Add files to /public/sounds.");
       }
@@ -242,7 +260,15 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [audioEnabled, lobbyId, match]);
+  }, [
+    audioEnabled,
+    lobbyId,
+    match?.nowPlaying?.clipId,
+    match?.nowPlaying?.seed,
+    match?.nowPlaying?.style,
+    match?.nowPlaying?.strategy,
+    match?.nowPlaying?.agentId,
+  ]);
 
   const clipTimeLeft = useMemo(() => {
     if (!match?.nowPlaying) {

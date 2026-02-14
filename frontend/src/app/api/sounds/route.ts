@@ -30,7 +30,7 @@ async function listCategory(category: SoundCategory): Promise<string[]> {
       .map((entry) => entry.name)
       .filter((filename) => AUDIO_EXTENSIONS.has(path.extname(filename).toLowerCase()))
       .sort((a, b) => a.localeCompare(b))
-      .map((filename) => `/sounds/${category}/${filename}`);
+      .map((filename) => `/sounds/${category}/${encodeURIComponent(filename)}`);
   } catch {
     return [];
   }
