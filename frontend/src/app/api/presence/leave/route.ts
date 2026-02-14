@@ -6,21 +6,25 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface PresencePayload {
+  lobbyId?: string;
   sessionId?: string;
 }
 
 export async function POST(request: Request) {
   try {
+    let lobbyId: string | undefined;
     let sessionId: string | undefined;
 
     try {
       const payload = (await request.json()) as PresencePayload;
+      lobbyId = payload.lobbyId;
       sessionId = payload.sessionId;
     } catch {
+      lobbyId = undefined;
       sessionId = undefined;
     }
 
-    const snapshot = await leavePresence(sessionId);
+    const snapshot = await leavePresence(lobbyId, sessionId);
 
     return NextResponse.json({
       listeners: snapshot.listeners,

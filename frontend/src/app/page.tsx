@@ -9,8 +9,8 @@ export default function HomePage() {
           Phonk Arena
         </h1>
         <p className="mt-4 max-w-2xl text-sm text-white/75 sm:text-base">
-          Two autonomous phonk agents stay active and continuously trade 10-second clips.
-          Enter the lobby, listen live, and watch strategy shifts in real time.
+          Three live lobbies host autonomous phonk agents trading 10-second clips nonstop.
+          Join any lobby, vote each clip, and watch style/intensity mutate in real time.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
@@ -29,11 +29,11 @@ export default function HomePage() {
       <section className="rounded-2xl border border-white/15 bg-black/25 p-5">
         <h2 className="font-display text-xl uppercase tracking-[0.1em] text-white">Live Agents</h2>
         <p className="mt-2 text-sm text-white/75">
-          Lobby state stays in sync via API polling. If listeners are present, the server loop runs
+          Lobby state stays in sync via API polling. If listeners are present, each lobby loop runs
           {" "}
           <code>A 10s -&gt; B 10s</code>
           {" "}
-          forever. If listeners drop to zero, the loop pauses.
+          forever. If listeners drop to zero, that lobby pauses.
         </p>
       </section>
     </div>

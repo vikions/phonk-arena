@@ -18,7 +18,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const match = await resetMatch();
+  let lobbyId: string | undefined;
+
+  try {
+    const payload = (await request.clone().json()) as { lobbyId?: string };
+    lobbyId = payload.lobbyId;
+  } catch {
+    lobbyId = undefined;
+  }
+
+  const match = await resetMatch(lobbyId);
 
   return NextResponse.json({
     ok: true,

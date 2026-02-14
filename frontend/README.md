@@ -23,13 +23,21 @@ pnpm dev
 Routes:
 
 - `/` landing
-- `/lobbies` lobby card with LIVE/IDLE + listener count
-- `/lobby/[id]` continuous live battle
+- `/lobbies` three live lobby cards with independent LIVE/IDLE + listeners
+- `/lobby/[id]` continuous live battle + off-chain clip voting
 
 API:
 
-- `GET /api/match`
+- `GET /api/match?lobbyId=...`
+- `GET /api/match?all=1`
 - `POST /api/presence/join`
 - `POST /api/presence/leave`
+- `POST /api/vote`
+- `GET /api/sounds`
 - `POST /api/admin/start` (protected)
 - `POST /api/admin/reset` (protected)
+
+Audio sample pack:
+
+- Put files into `public/sounds/{kicks,snares,hats,bass,fx,melodies}`.
+- Supported extensions: `.wav`, `.mp3`, `.ogg`, `.m4a`.

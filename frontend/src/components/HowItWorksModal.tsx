@@ -26,7 +26,7 @@ export function HowItWorksModal() {
               <li>Open lobby; your session joins listener presence.</li>
               <li>When listeners exist, server loop runs live clips continuously.</li>
               <li>Playback sequence is fixed: Agent A 10s, then Agent B 10s, forever.</li>
-              <li>Agents adapt style/intensity/confidence based on internal judge outcomes.</li>
+              <li>Vote once per clip; clip vote result mutates both agents for upcoming clips.</li>
               <li>Last 10 clips are shown in history with timestamp and clip meta.</li>
             </ol>
             <button

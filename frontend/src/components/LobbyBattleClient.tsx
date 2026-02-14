@@ -5,10 +5,10 @@ import { useAccount, useChainId, useSwitchChain } from "wagmi";
 
 import { renderPhonkClip } from "@/lib/audio/phonkSynth";
 import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
-import type { AgentId, MatchSnapshot } from "@/lib/types";
+import type { LobbyId, MatchSnapshot, VoteResult, VoteSide } from "@/lib/types";
 
 interface LobbyBattleClientProps {
-  lobbyId: string;
+  lobbyId: LobbyId;
 }
 
 interface PresenceJoinResponse {
@@ -44,7 +44,7 @@ function phaseTitle(phase: MatchSnapshot["phase"]): string {
 }
 
 export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
 
@@ -53,6 +53,9 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const [error, setError] = useState<string | null>(null);
   const [uiMessage, setUiMessage] = useState<string | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [voteBusy, setVoteBusy] = useState(false);
+  const [voteError, setVoteError] = useState<string | null>(null);
+  const [userVotes, setUserVotes] = useState<Record<string, VoteSide>>({});
   const [now, setNow] = useState(() => Date.now());
 
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -68,6 +71,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        lobbyId,
         sessionId: sessionIdRef.current,
       }),
     });
@@ -82,7 +86,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     if (payload.snapshot) {
       setMatch(payload.snapshot);
     }
-  }, []);
+  }, [lobbyId]);
 
   const leavePresence = useCallback(async () => {
     await fetch("/api/presence/leave", {
@@ -91,14 +95,15 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        lobbyId,
         sessionId: sessionIdRef.current,
       }),
       keepalive: true,
     }).catch(() => undefined);
-  }, []);
+  }, [lobbyId]);
 
   const fetchMatch = useCallback(async () => {
-    const response = await fetch("/api/match", {
+    const response = await fetch(`/api/match?lobbyId=${encodeURIComponent(lobbyId)}`, {
       cache: "no-store",
     });
 
@@ -108,7 +113,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
     const data = (await response.json()) as MatchSnapshot;
     setMatch(data);
-  }, []);
+  }, [lobbyId]);
 
   useEffect(() => {
     let stopped = false;
@@ -148,7 +153,10 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     }, 250);
 
     const handleUnload = () => {
-      const payload = JSON.stringify({ sessionId: sessionIdRef.current });
+      const payload = JSON.stringify({
+        lobbyId,
+        sessionId: sessionIdRef.current,
+      });
       if (navigator.sendBeacon) {
         navigator.sendBeacon("/api/presence/leave", new Blob([payload], { type: "application/json" }));
       }
@@ -164,7 +172,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       window.removeEventListener("beforeunload", handleUnload);
       void leavePresence();
     };
-  }, [fetchMatch, joinPresence, leavePresence]);
+  }, [fetchMatch, joinPresence, leavePresence, lobbyId]);
 
   async function enableAudio() {
     if (!audioCtxRef.current) {
@@ -188,20 +196,20 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
     lastPlayedClipIdRef.current = clip.clipId;
 
-    const agent = match.agents.find((item) => item.id === clip.agentId);
-    if (!agent) {
-      return;
-    }
-
     let cancelled = false;
 
     const renderAndPlay = async () => {
       try {
         const buffer = await renderPhonkClip({
-          seed: clip.seed,
+          seed: `${lobbyId}:${clip.seed}`,
           style: clip.style,
           intensity: clip.intensity,
-          durationSec: 10,
+          durationSec: clip.durationMs / 1000,
+          bpm: clip.bpm,
+          mutationLevel: clip.mutationLevel,
+          patternDensity: clip.patternDensity,
+          distortion: clip.distortion,
+          fxChance: clip.fxChance,
         });
 
         if (cancelled || !audioCtxRef.current) {
@@ -215,14 +223,14 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
         const source = context.createBufferSource();
         const gain = context.createGain();
-        gain.gain.value = 0.9;
+        gain.gain.value = 0.92;
 
         source.buffer = buffer;
         source.connect(gain);
         gain.connect(context.destination);
         source.start();
       } catch {
-        setUiMessage("Audio synthesis skipped for this clip.");
+        setUiMessage("Sample pack not available for this clip. Add files to /public/sounds.");
       }
     };
 
@@ -231,7 +239,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [audioEnabled, match]);
+  }, [audioEnabled, lobbyId, match]);
 
   const clipTimeLeft = useMemo(() => {
     if (!match?.nowPlaying) {
@@ -241,7 +249,60 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     return Math.max(0, Math.ceil((match.nowPlaying.endsAt - now) / 1000));
   }, [match?.nowPlaying, now]);
 
-  const activeAgentId: AgentId | null = match?.nowPlaying?.agentId ?? null;
+  const currentClipId = match?.nowPlaying?.clipId ?? null;
+  const currentUserVote = currentClipId ? userVotes[currentClipId] ?? null : null;
+  const canVote =
+    Boolean(audioEnabled) &&
+    Boolean(match?.nowPlaying) &&
+    Boolean(address) &&
+    !wrongChain &&
+    !voteBusy &&
+    currentUserVote === null;
+
+  const submitVote = useCallback(
+    async (side: VoteSide) => {
+      if (!address || !match?.nowPlaying || !canVote) {
+        return;
+      }
+
+      setVoteBusy(true);
+      setVoteError(null);
+
+      try {
+        const response = await fetch("/api/vote", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            lobbyId,
+            clipId: match.nowPlaying.clipId,
+            side,
+            address,
+          }),
+        });
+
+        const payload = (await response.json()) as VoteResult | { error?: string };
+
+        if (!response.ok) {
+          throw new Error("error" in payload && payload.error ? payload.error : "Vote failed.");
+        }
+
+        const vote = payload as VoteResult;
+        setUserVotes((prev) => ({
+          ...prev,
+          [vote.clipId]: vote.userVote,
+        }));
+
+        await fetchMatch();
+      } catch (submitError) {
+        setVoteError(submitError instanceof Error ? submitError.message : "Vote failed.");
+      } finally {
+        setVoteBusy(false);
+      }
+    },
+    [address, canVote, fetchMatch, lobbyId, match?.nowPlaying],
+  );
 
   if (loading && !match) {
     return <p className="text-white/80">Joining lobby {lobbyId}...</p>;
@@ -256,10 +317,11 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       <section className="rounded-2xl border border-white/15 bg-black/35 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-white/50">Lobby {match.lobbyId}</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-white/50">{match.lobby.displayName}</p>
             <h1 className="font-display text-3xl uppercase tracking-[0.1em] text-white">
               {phaseTitle(match.phase)}
             </h1>
+            <p className="mt-1 text-xs text-white/65">{match.lobby.description}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-right text-sm">
@@ -313,7 +375,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             {match.agents.map((agent) => {
-              const isActive = activeAgentId === agent.id;
+              const isActive = match.nowPlaying?.agentId === agent.id;
 
               return (
                 <article
@@ -323,9 +385,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
                   } ${isActive ? (agent.id === "A" ? "shadow-neon" : "shadow-blood") : ""}`}
                 >
                   <div className="flex items-center justify-between">
-                    <p className="font-display text-xl uppercase tracking-[0.1em] text-white">
-                      Agent {agent.id}
-                    </p>
+                    <p className="font-display text-xl uppercase tracking-[0.1em] text-white">Agent {agent.id}</p>
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-semibold ${
                         agent.currentStyle === "HARD"
@@ -353,30 +413,14 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
                     </div>
                   </div>
 
-                  <p className="mt-2 text-xs text-white/70">
-                    Intensity: {(agent.intensity * 100).toFixed(0)}%
+                  <p className="mt-2 text-xs text-white/70">Intensity: {(agent.intensity * 100).toFixed(0)}%</p>
+                  <p className="mt-1 text-xs text-white/70">
+                    Mutation: {(agent.mutationSensitivity * 100).toFixed(0)}%
                   </p>
                   <p className="mt-1 text-xs text-white/70">Clips: {agent.clipsPlayed}</p>
                   <p className="mt-1 text-xs text-white/70">
                     W/L: {agent.wins}/{agent.losses}
                   </p>
-
-                  {isActive ? (
-                    <div className="mt-3 flex items-end gap-1.5">
-                      {Array.from({ length: 12 }).map((_, index) => (
-                        <span
-                          key={`${agent.id}-bar-${index}`}
-                          className={`inline-block w-1 rounded bg-current opacity-85 ${
-                            agent.id === "A" ? "text-cyan-100" : "text-red-100"
-                          } animate-pulseSlow`}
-                          style={{
-                            height: `${10 + (index % 5) * 4}px`,
-                            animationDelay: `${index * 0.08}s`,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
                 </article>
               );
             })}
@@ -384,7 +428,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
           <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
             <h2 className="font-display text-lg uppercase tracking-[0.1em] text-white">Live Clip History</h2>
-            <p className="mt-1 text-xs text-white/70">Last 10 clips from the continuous agent loop.</p>
+            <p className="mt-1 text-xs text-white/70">Last 10 clips in this lobby only.</p>
 
             {match.clipHistory.length === 0 ? (
               <p className="mt-3 text-sm text-white/70">History appears after first completed clip.</p>
@@ -400,7 +444,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
                         {shortTime(item.startedAt)} - Agent {item.agentId} - {item.style}
                       </p>
                       <p>
-                        score {item.judgeScore} - {item.outcome}
+                        votes {item.voteTally.aVotes}:{item.voteTally.bVotes} ({item.voteTally.winner})
                       </p>
                     </div>
                     <p className="mt-1 text-white/65">{item.note}</p>
@@ -416,12 +460,15 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
             <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Now Playing</h3>
             {match.nowPlaying ? (
               <div className="mt-2 space-y-1 text-sm text-white/85">
+                <p>Clip: {match.nowPlaying.clipId}</p>
                 <p>Agent: {match.nowPlaying.agentId}</p>
                 <p>Style: {match.nowPlaying.style}</p>
                 <p>Strategy: {match.nowPlaying.strategy}</p>
-                <p>Confidence: {(match.nowPlaying.confidence * 100).toFixed(0)}%</p>
                 <p>Intensity: {(match.nowPlaying.intensity * 100).toFixed(0)}%</p>
-                <p>Seed: {match.nowPlaying.seed}</p>
+                <p>Confidence: {(match.nowPlaying.confidence * 100).toFixed(0)}%</p>
+                <p>BPM: {match.nowPlaying.bpm.toFixed(1)}</p>
+                <p>Density: {(match.nowPlaying.patternDensity * 100).toFixed(0)}%</p>
+                <p>Distortion: {(match.nowPlaying.distortion * 100).toFixed(0)}%</p>
               </div>
             ) : (
               <p className="mt-2 text-sm text-white/70">Lobby is idle. Waiting for listeners.</p>
@@ -429,26 +476,40 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           </section>
 
           <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
-            <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Future Controls</h3>
+            <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Vote This Clip</h3>
             <p className="mt-2 text-xs text-white/70">
-              Voting and manual mutations can be added later without changing the live loop core.
+              One vote per wallet per clip. Votes directly affect mutation for the next clips.
             </p>
+
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled
-                className="rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100/60"
+                onClick={() => void submitVote("A")}
+                disabled={!canVote}
+                className="rounded-xl border border-cyan-300/35 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Vote Agent A
               </button>
               <button
                 type="button"
-                disabled
-                className="rounded-xl border border-red-300/30 bg-red-300/10 px-3 py-2 text-xs font-semibold text-red-100/60"
+                onClick={() => void submitVote("B")}
+                disabled={!canVote}
+                className="rounded-xl border border-red-300/35 bg-red-300/10 px-3 py-2 text-xs font-semibold text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Vote Agent B
               </button>
             </div>
+
+            <div className="mt-3 text-xs text-white/80">
+              <p>
+                Live tally: A {match.currentVoteTally?.aVotes ?? 0} - B {match.currentVoteTally?.bVotes ?? 0}
+              </p>
+              <p>Winner: {match.currentVoteTally?.winner ?? "TIE"}</p>
+              <p>Your vote: {currentUserVote ?? "Not voted"}</p>
+            </div>
+
+            {voteBusy ? <p className="mt-2 text-xs text-white/70">Submitting vote...</p> : null}
+            {voteError ? <p className="mt-2 text-xs text-red-300">{voteError}</p> : null}
           </section>
 
           {uiMessage ? <p className="text-xs text-white/80">{uiMessage}</p> : null}
