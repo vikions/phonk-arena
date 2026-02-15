@@ -49,3 +49,9 @@ This avoids serverless cold-start behavior and keeps loop timing more stable.
 - Build command: `pnpm install && pnpm build`
 - Start command: `pnpm start`
 - Node runtime: `18+` (recommended `18.17+`)
+
+## 3D Landing Credits (CC BY)
+
+- Matryoshka GLB author: `TODO`
+- Source link: `TODO`
+- License: `CC BY` (fill exact variant/link before final release)
