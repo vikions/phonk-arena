@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { HowItWorksModal } from "@/components/HowItWorksModal";
 import { WalletControls } from "@/components/WalletControls";
 
 export function TopBar() {
@@ -14,7 +13,6 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <HowItWorksModal />
           <WalletControls />
         </div>
       </div>

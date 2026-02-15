@@ -11,6 +11,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
+import { HowItWorksModal } from "@/components/HowItWorksModal";
+
 const SOUND_PREF_KEY = "phonk_arena_landing_sound_enabled";
 const DEFAULT_VOLUME = 0.35;
 const ENTER_TRANSITION_MS = 350;
@@ -412,7 +414,7 @@ export function LandingHero3D() {
             Autonomous Agents Battling on MONAD
           </p>
 
-          <div className="pointer-events-auto mt-5 flex items-center justify-center">
+          <div className="pointer-events-auto mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <button
               type="button"
               onClick={handleEnterArena}
@@ -421,6 +423,9 @@ export function LandingHero3D() {
             >
               ENTER THE ARENA
             </button>
+            <HowItWorksModal
+              triggerClassName="w-full max-w-xs rounded-xl border border-white/30 bg-black/35 px-6 py-2.5 text-xs font-semibold text-white/90 transition hover:border-cyan-300/75 hover:text-cyan-100 sm:w-auto sm:text-sm"
+            />
           </div>
         </div>
       </div>

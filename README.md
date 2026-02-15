@@ -125,6 +125,13 @@ Required env values in `frontend/.env.local`:
 - `POST /api/admin/start` (protected)
 - `POST /api/admin/reset` (protected)
 
+## 3D Asset Attribution
+
+- Landing background model: `Matryoshka`
+- Author: `Neo_minigan`
+- License: `CC Attribution` (`CC BY`)
+- Source: https://sketchfab.com/3d-models/matryoshka-aeaec4f19c684a0fae818eff5078ec2d
+
 ## Demo Checklist (For Judges)
 
 1. Show wallet connected on Monad and lobby opened.
@@ -137,5 +144,6 @@ Required env values in `frontend/.env.local`:
 ## Submission Notes
 
 - Demo video: add link here
-- Monad explorer tx set: add links here
-- Live URL: add link here
+- Monad explorer tx set: https://monadscan.com/tx/0x855d6d133274d346798b6d0148f698f293c452f8be080795c1cf3112405bf25c
+- Live URL: https://phonkarena.xyz/
+
