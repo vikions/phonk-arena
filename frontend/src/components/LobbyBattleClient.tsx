@@ -51,14 +51,14 @@ function shortTime(timestamp: number): string {
   });
 }
 
-function phaseTitle(phase: MatchSnapshot["phase"]): string {
+function phaseTitle(phase: MatchSnapshot["phase"], status: MatchSnapshot["status"]): string {
   switch (phase) {
     case "A_PLAYING":
       return "Now playing Agent A";
     case "B_PLAYING":
       return "Now playing Agent B";
     default:
-      return "Lobby idle";
+      return status === "LIVE" ? "Transition pause" : "Lobby idle";
   }
 }
 
@@ -139,6 +139,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const [claimBusy, setClaimBusy] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimTxHash, setClaimTxHash] = useState<`0x${string}` | undefined>(undefined);
+  const [pendingClaimEpochId, setPendingClaimEpochId] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [walletChainId, setWalletChainId] = useState<number | null>(null);
 
@@ -190,7 +191,12 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     },
   });
 
-  const { isLoading: claimConfirming } = useWaitForTransactionReceipt({
+  const {
+    isLoading: claimConfirming,
+    isSuccess: claimConfirmed,
+    isError: claimFailed,
+    error: claimReceiptError,
+  } = useWaitForTransactionReceipt({
     hash: claimTxHash,
     query: {
       enabled: Boolean(claimTxHash),
@@ -449,7 +455,6 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     return Math.max(0, Math.ceil((match.nowPlaying.endsAt - now) / 1000));
   }, [match?.nowPlaying, now]);
 
-  const currentClipId = match?.nowPlaying?.clipId ?? null;
   const currentEpochIdNumber = match?.currentEpoch.epochId ?? Number(currentEpochId);
   let parsedBetWei: bigint | null = null;
   try {
@@ -646,20 +651,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       });
 
       setClaimTxHash(hash);
-
-      await fetch("/api/claim", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          lobbyId,
-          epochId: claimableEpochId,
-          address,
-        }),
-      }).catch(() => undefined);
-
-      await fetchMatch();
+      setPendingClaimEpochId(claimableEpochId);
     } catch (submitError) {
       setClaimError(submitError instanceof Error ? submitError.message : "Claim failed.");
     } finally {
@@ -676,6 +668,51 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     writeContractAsync,
   ]);
 
+  useEffect(() => {
+    if (!claimConfirmed || !claimTxHash || pendingClaimEpochId === null || !address) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const mirrorClaim = async () => {
+      await fetch("/api/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lobbyId,
+          epochId: pendingClaimEpochId,
+          address,
+        }),
+      }).catch(() => undefined);
+
+      await fetchMatch();
+
+      if (!cancelled) {
+        setPendingClaimEpochId(null);
+      }
+    };
+
+    void mirrorClaim();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, claimConfirmed, claimTxHash, fetchMatch, lobbyId, pendingClaimEpochId]);
+
+  useEffect(() => {
+    if (!claimFailed) {
+      return;
+    }
+
+    const message =
+      claimReceiptError instanceof Error ? claimReceiptError.message : "Claim transaction failed.";
+    setClaimError(message);
+    setPendingClaimEpochId(null);
+  }, [claimFailed, claimReceiptError]);
+
   if (loading && !match) {
     return <p className="text-white/80">Joining lobby {lobbyId}...</p>;
   }
@@ -691,7 +728,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-white/50">{match.lobby.displayName}</p>
             <h1 className="font-display text-3xl uppercase tracking-[0.1em] text-white">
-              {phaseTitle(match.phase)}
+              {phaseTitle(match.phase, match.status)}
             </h1>
             <p className="mt-1 text-xs text-white/65">{match.lobby.description}</p>
           </div>
@@ -703,7 +740,9 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
             </div>
             <div className="rounded-xl border border-red-300/30 bg-red-400/10 px-3 py-2">
               <p className="text-xs text-red-100/70">Clip Timer</p>
-              <p className="font-display text-red-100">{clipTimeLeft ?? "-"}s</p>
+              <p className="font-display text-red-100">
+                {clipTimeLeft !== null ? `${clipTimeLeft}s` : match.status === "LIVE" ? "PAUSE" : "-"}
+              </p>
             </div>
           </div>
         </div>
@@ -732,7 +771,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           Enable Audio
         </button>
       ) : (
-        <p className="text-xs text-cyan-200/80">Audio unlocked. New clips autoplay every 10 seconds.</p>
+        <p className="text-xs text-cyan-200/80">Audio unlocked. Clips play 10s with a 2.5s pause between agents.</p>
       )}
 
       {wrongChain ? (
@@ -861,7 +900,11 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
                 <p>Distortion: {(match.nowPlaying.distortion * 100).toFixed(0)}%</p>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-white/70">Lobby is idle. Waiting for listeners.</p>
+              <p className="mt-2 text-sm text-white/70">
+                {match.status === "LIVE"
+                  ? "Transition pause between clips (2.5s)."
+                  : "Lobby is idle. Waiting for listeners."}
+              </p>
             )}
           </section>
 

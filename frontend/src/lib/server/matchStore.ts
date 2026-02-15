@@ -24,6 +24,8 @@ import type {
 } from "@/lib/types";
 
 const CLIP_DURATION_MS = 10_000;
+const CLIP_GAP_MS = 2_500;
+const CLIP_SLOT_MS = CLIP_DURATION_MS + CLIP_GAP_MS;
 const LISTENER_TTL_MS = 30_000;
 const HISTORY_LIMIT = 10;
 const VOTE_RETENTION_CLIPS = 30;
@@ -1258,7 +1260,7 @@ function pauseLoop(state: StoredLobbyState, now: number): boolean {
   }
 
   const activeElapsed = state.loop.runStartElapsedMs + (now - state.loop.runStartedAt);
-  const snappedElapsed = Math.floor(activeElapsed / CLIP_DURATION_MS) * CLIP_DURATION_MS;
+  const snappedElapsed = Math.floor(activeElapsed / CLIP_SLOT_MS) * CLIP_SLOT_MS;
 
   state.loop.elapsedMs = snappedElapsed;
   state.loop.running = false;
@@ -1308,7 +1310,7 @@ function processCompletedClip(state: StoredLobbyState, clipIndex: number): void 
 
   state.agents[agentId].clipsPlayed += 1;
 
-  const clipStartElapsed = clipIndex * CLIP_DURATION_MS;
+  const clipStartElapsed = clipIndex * CLIP_SLOT_MS;
   const startedAt = state.loop.runStartedAt + (clipStartElapsed - state.loop.runStartElapsedMs);
   const resolvedEpochId = epochIdFromMs(startedAt);
 
@@ -1346,7 +1348,8 @@ function syncClipSimulation(state: StoredLobbyState, now: number): boolean {
   }
 
   const elapsed = getActiveElapsedMs(state, now);
-  const completedClipCount = Math.floor(elapsed / CLIP_DURATION_MS);
+  // A clip is considered completed when its 10s playback ends.
+  const completedClipCount = Math.floor((elapsed + CLIP_GAP_MS) / CLIP_SLOT_MS);
 
   let changed = false;
 
@@ -1364,13 +1367,17 @@ function buildNowPlaying(state: StoredLobbyState, now: number): NowPlayingClip |
   }
 
   const elapsed = getActiveElapsedMs(state, now);
-  const clipIndex = Math.floor(elapsed / CLIP_DURATION_MS);
-  const clipOffset = elapsed % CLIP_DURATION_MS;
+  const clipIndex = Math.floor(elapsed / CLIP_SLOT_MS);
+  const clipOffsetInSlot = elapsed % CLIP_SLOT_MS;
+  if (clipOffsetInSlot >= CLIP_DURATION_MS) {
+    return null;
+  }
+
   const agentId = activeAgentForClip(clipIndex);
   const agent = state.agents[agentId];
   const plan = computeClipPlan(state, agent, clipIndex);
 
-  const startedAt = now - clipOffset;
+  const startedAt = now - clipOffsetInSlot;
 
   return {
     clipId: `${state.matchId}-${clipIndex}`,
@@ -1438,7 +1445,16 @@ function buildClaimableEpochIds(
       continue;
     }
 
-    if (ensureEpochAggregate(state, epochId).finalizedAt !== null) {
+    const aggregate = ensureEpochAggregate(state, epochId);
+    if (aggregate.finalizedAt === null) {
+      continue;
+    }
+
+    const hasWinningBet =
+      (aggregate.winner === "A" && BigInt(safeWei(bet.amountAWei)) > 0n) ||
+      (aggregate.winner === "B" && BigInt(safeWei(bet.amountBWei)) > 0n);
+
+    if (hasWinningBet) {
       claimable.push(epochId);
     }
   }
@@ -1711,6 +1727,20 @@ export async function markClaimed(input: {
   const state = await loadLobbyState(lobbyId);
   const key = epochKey(input.epochId);
   if (!state.userBetsByEpoch[key] || !state.userBetsByEpoch[key][normalizedAddress]) {
+    return;
+  }
+
+  const aggregate = ensureEpochAggregate(state, input.epochId);
+  if (aggregate.finalizedAt === null || aggregate.winner === null || aggregate.winner === "TIE") {
+    return;
+  }
+
+  const bet = state.userBetsByEpoch[key][normalizedAddress];
+  const hasWinningAmount =
+    (aggregate.winner === "A" && BigInt(safeWei(bet.amountAWei)) > 0n) ||
+    (aggregate.winner === "B" && BigInt(safeWei(bet.amountBWei)) > 0n);
+
+  if (!hasWinningAmount) {
     return;
   }
 
