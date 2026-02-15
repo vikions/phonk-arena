@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useAccount,
   useChainId,
@@ -11,7 +11,7 @@ import {
 } from "wagmi";
 
 import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
-import { ensureMonadNetwork } from "@/lib/walletNetwork";
+import { ensureMonadNetwork, readWalletChainId } from "@/lib/walletNetwork";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -24,13 +24,43 @@ export function WalletControls() {
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
+  const [walletChainId, setWalletChainId] = useState<number | null>(null);
 
   const injectedConnector = useMemo(
     () => connectors.find((connector) => connector.type === "injected") ?? connectors[0],
     [connectors],
   );
 
-  const wrongChain = isConnected && chainId !== MONAD_MAINNET_CHAIN_ID;
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncChainId = async () => {
+      if (!isConnected) {
+        if (!cancelled) {
+          setWalletChainId(null);
+        }
+        return;
+      }
+
+      const detected = await readWalletChainId(walletClient);
+      if (!cancelled && detected !== null) {
+        setWalletChainId(detected);
+      }
+    };
+
+    void syncChainId();
+    const interval = setInterval(() => {
+      void syncChainId();
+    }, 2_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isConnected, walletClient]);
+
+  const resolvedChainId = walletChainId ?? chainId;
+  const wrongChain = isConnected && resolvedChainId !== MONAD_MAINNET_CHAIN_ID;
 
   if (!isConnected) {
     return (

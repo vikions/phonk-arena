@@ -22,7 +22,7 @@ import {
   voteSideToContractSide,
 } from "@/lib/contract";
 import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
-import { ensureMonadNetwork } from "@/lib/walletNetwork";
+import { ensureMonadNetwork, readWalletChainId } from "@/lib/walletNetwork";
 import type { LobbyId, MatchSnapshot, VoteSide } from "@/lib/types";
 
 interface LobbyBattleClientProps {
@@ -129,12 +129,14 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimTxHash, setClaimTxHash] = useState<`0x${string}` | undefined>(undefined);
   const [now, setNow] = useState(() => Date.now());
+  const [walletChainId, setWalletChainId] = useState<number | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const lastPlayedClipIdRef = useRef<string>("");
   const sessionIdRef = useRef<string>(makeSessionId());
 
-  const wrongChain = isConnected && chainId !== MONAD_MAINNET_CHAIN_ID;
+  const resolvedChainId = walletChainId ?? chainId;
+  const wrongChain = isConnected && resolvedChainId !== MONAD_MAINNET_CHAIN_ID;
   const lobbyIdBytes32 = useMemo(() => lobbyIdToBytes32(lobbyId), [lobbyId]);
   const currentEpochId = useMemo(() => getCurrentEpochId(now), [now]);
   const epochEnd = useMemo(() => getEpochEndTimestampSec(now), [now]);
@@ -303,6 +305,34 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     };
   }, [fetchMatch, joinPresence, leavePresence, lobbyId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncChainId = async () => {
+      if (!isConnected) {
+        if (!cancelled) {
+          setWalletChainId(null);
+        }
+        return;
+      }
+
+      const detected = await readWalletChainId(walletClient);
+      if (!cancelled && detected !== null) {
+        setWalletChainId(detected);
+      }
+    };
+
+    void syncChainId();
+    const interval = setInterval(() => {
+      void syncChainId();
+    }, 2_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isConnected, walletClient]);
+
   async function enableAudio() {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioContext();
@@ -438,20 +468,26 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     !claimConfirming;
 
   const ensureWalletOnMonad = useCallback(async () => {
-    if (chainId === MONAD_MAINNET_CHAIN_ID) {
+    const detectedBefore = await readWalletChainId(walletClient);
+    if (detectedBefore === MONAD_MAINNET_CHAIN_ID || resolvedChainId === MONAD_MAINNET_CHAIN_ID) {
       return;
     }
 
     try {
       await ensureMonadNetwork(walletClient);
-      return;
     } catch {
       if (switchChain) {
         switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
       }
       throw new Error("Switch to Monad mainnet in wallet and retry.");
     }
-  }, [chainId, switchChain, walletClient]);
+
+    const detectedAfter = await readWalletChainId(walletClient);
+    if (detectedAfter !== MONAD_MAINNET_CHAIN_ID) {
+      throw new Error("Switch to Monad mainnet in wallet and retry.");
+    }
+    setWalletChainId(detectedAfter);
+  }, [resolvedChainId, switchChain, walletClient]);
 
   const submitVote = useCallback(
     async (side: VoteSide) => {
@@ -492,10 +528,11 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         await Promise.all([fetchMatch(), refetchOnchainTally(), refetchHasVoted()]);
       } catch (submitError) {
         const message = submitError instanceof Error ? submitError.message : "Vote failed.";
+        const lower = message.toLowerCase();
         if (
-          message.includes("does not match the target chain") ||
-          message.includes("chain") ||
-          message.includes("network")
+          lower.includes("does not match the target chain") ||
+          lower.includes("wallet is not on monad") ||
+          lower.includes("switch to monad")
         ) {
           setVoteError("Switch to Monad mainnet in wallet and retry vote.");
         } else {
@@ -683,6 +720,9 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       {wrongChain ? (
         <div className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-sm text-amber-100">
           <p>Wallet is on the wrong network.</p>
+          <p className="mt-1 text-xs text-amber-100/80">
+            Current chain: {resolvedChainId ?? "unknown"} | Required: {MONAD_MAINNET_CHAIN_ID}
+          </p>
           <button
             type="button"
             onClick={() => {
