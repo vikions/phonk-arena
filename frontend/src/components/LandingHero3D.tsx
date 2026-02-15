@@ -11,8 +11,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
-import { HowItWorksModal } from "@/components/HowItWorksModal";
-
 const SOUND_PREF_KEY = "phonk_arena_landing_sound_enabled";
 const DEFAULT_VOLUME = 0.35;
 const ENTER_TRANSITION_MS = 350;
@@ -123,7 +121,7 @@ function MatryoshkaModel({
     model.position.set(-center.x, -center.y, -center.z);
     model.scale.setScalar(fitScale);
 
-    const suggestedCameraZ = clamp(2.4 + scaledDepth * 0.24, 2.4, 2.95);
+    const suggestedCameraZ = clamp(2.7 + scaledDepth * 0.28, 2.7, 3.3);
     onFit(suggestedCameraZ);
 
     let meshIndex = 0;
@@ -166,7 +164,7 @@ function MatryoshkaModel({
     }
 
     const elapsed = state.clock.getElapsedTime();
-    const targetY = -0.28 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
+    const targetY = -0.36 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
     const targetScale = 1 + Math.sin(elapsed * 1.65) * 0.005 + openProgress * 0.1;
     const targetPitch = Math.sin(elapsed * 0.55) * 0.02 + openProgress * THREE.MathUtils.degToRad(3);
 
@@ -179,7 +177,7 @@ function MatryoshkaModel({
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.28, 0]}>
+    <group ref={groupRef} position={[0, -0.36, 0]}>
       <primitive object={model} />
       <HologramRing openProgress={openProgress} />
     </group>
@@ -192,8 +190,8 @@ function Scene({ openProgress }: { openProgress: number }) {
 
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
-    cam.position.set(0, 0.1, cameraZ);
-    cam.lookAt(0, -0.18, 0);
+    cam.position.set(0, 0.06, cameraZ);
+    cam.lookAt(0, -0.28, 0);
     cam.updateProjectionMatrix();
   }, [camera, cameraZ]);
 
@@ -224,15 +222,15 @@ function Scene({ openProgress }: { openProgress: number }) {
         enableDamping
         dampingFactor={0.08}
         rotateSpeed={0.7}
-        minPolarAngle={THREE.MathUtils.degToRad(62)}
-        maxPolarAngle={THREE.MathUtils.degToRad(118)}
-        target={[0, -0.18, 0]}
+        minPolarAngle={THREE.MathUtils.degToRad(86)}
+        maxPolarAngle={THREE.MathUtils.degToRad(94)}
+        target={[0, -0.28, 0]}
       />
 
       <ContactShadows
-        position={[0, -1.35, 0]}
+        position={[0, -1.5, 0]}
         opacity={0.56}
-        scale={4.4}
+        scale={4.7}
         blur={2.2}
         far={4}
         color="#170d22"
@@ -382,7 +380,7 @@ export function LandingHero3D() {
       <Canvas
         className="fixed inset-0 z-0"
         style={{ width: "100vw", height: "100vh", background: "transparent" }}
-        camera={{ position: [0, 0.1, 2.5], fov: 46 }}
+        camera={{ position: [0, 0.06, 2.8], fov: 50 }}
         dpr={[1, 1.5]}
         gl={{ alpha: true, antialias: true }}
         onCreated={({ gl }) => {
@@ -414,7 +412,7 @@ export function LandingHero3D() {
             Autonomous Agents Battling on MONAD
           </p>
 
-          <div className="pointer-events-auto mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="pointer-events-auto mt-5 flex items-center justify-center">
             <button
               type="button"
               onClick={handleEnterArena}
@@ -423,7 +421,6 @@ export function LandingHero3D() {
             >
               ENTER THE ARENA
             </button>
-            <HowItWorksModal />
           </div>
         </div>
       </div>
