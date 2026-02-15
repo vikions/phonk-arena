@@ -16,7 +16,7 @@ import { HowItWorksModal } from "@/components/HowItWorksModal";
 const SOUND_PREF_KEY = "phonk_arena_landing_sound_enabled";
 const DEFAULT_VOLUME = 0.35;
 const ENTER_TRANSITION_MS = 350;
-const TARGET_MODEL_HEIGHT = 2.45;
+const TARGET_MODEL_HEIGHT = 2.05;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -123,7 +123,7 @@ function MatryoshkaModel({
     model.position.set(-center.x, -center.y, -center.z);
     model.scale.setScalar(fitScale);
 
-    const suggestedCameraZ = clamp(1.25 + scaledDepth * 0.35, 1.28, 1.68);
+    const suggestedCameraZ = clamp(2.35 + scaledDepth * 0.26, 2.35, 2.9);
     onFit(suggestedCameraZ);
 
     let meshIndex = 0;
@@ -166,7 +166,7 @@ function MatryoshkaModel({
     }
 
     const elapsed = state.clock.getElapsedTime();
-    const targetY = -0.22 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
+    const targetY = -0.16 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
     const targetScale = 1 + Math.sin(elapsed * 1.65) * 0.005 + openProgress * 0.1;
     const targetPitch = Math.sin(elapsed * 0.55) * 0.02 + openProgress * THREE.MathUtils.degToRad(3);
 
@@ -179,7 +179,7 @@ function MatryoshkaModel({
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.22, 0]}>
+    <group ref={groupRef} position={[0, -0.16, 0]}>
       <primitive object={model} />
       <HologramRing openProgress={openProgress} />
     </group>
@@ -192,17 +192,18 @@ function Scene({ openProgress }: { openProgress: number }) {
 
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
-    cam.position.set(0, 0.16, cameraZ);
-    cam.lookAt(0, -0.05, 0);
+    cam.position.set(0, 0.1, cameraZ);
+    cam.lookAt(0, -0.1, 0);
     cam.updateProjectionMatrix();
   }, [camera, cameraZ]);
 
   return (
     <>
-      <ambientLight intensity={0.22} />
-      <directionalLight position={[2.3, 2.6, 2.4]} intensity={1.25} color="#ffffff" castShadow />
-      <directionalLight position={[-2.5, 1.3, -2.4]} intensity={0.6} color="#8f4bff" />
-      <pointLight position={[0, 0.7, -1.9]} intensity={0.52} color="#ff3b7c" />
+      <ambientLight intensity={0.3} />
+      <hemisphereLight args={["#ffe8ff", "#120718", 0.32]} />
+      <directionalLight position={[2.3, 2.6, 2.4]} intensity={1.42} color="#ffffff" castShadow />
+      <directionalLight position={[-2.5, 1.3, -2.4]} intensity={0.78} color="#8f4bff" />
+      <pointLight position={[0, 0.7, -1.9]} intensity={0.68} color="#ff3b7c" />
 
       <Suspense fallback={null}>
         <MatryoshkaModel openProgress={openProgress} onFit={setCameraZ} />
@@ -225,13 +226,13 @@ function Scene({ openProgress }: { openProgress: number }) {
         rotateSpeed={0.7}
         minPolarAngle={THREE.MathUtils.degToRad(62)}
         maxPolarAngle={THREE.MathUtils.degToRad(118)}
-        target={[0, -0.05, 0]}
+        target={[0, -0.1, 0]}
       />
 
       <ContactShadows
-        position={[0, -1.45, 0]}
-        opacity={0.62}
-        scale={4.8}
+        position={[0, -1.35, 0]}
+        opacity={0.56}
+        scale={4.4}
         blur={2.2}
         far={4}
         color="#170d22"
@@ -386,19 +387,19 @@ export function LandingHero3D() {
       <Canvas
         className="fixed inset-0 z-0"
         style={{ width: "100vw", height: "100vh", background: "transparent" }}
-        camera={{ position: [0, 0.16, 1.5], fov: 42 }}
+        camera={{ position: [0, 0.1, 2.5], fov: 46 }}
         dpr={[1, 1.5]}
         gl={{ alpha: true, antialias: true }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.05;
+          gl.toneMappingExposure = 1.18;
         }}
       >
         <Scene openProgress={leaving ? 1 : 0} />
       </Canvas>
 
-      <div className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(circle_at_50%_42%,rgba(95,47,180,0.2),transparent_44%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.2),transparent_35%),radial-gradient(circle_at_50%_82%,rgba(0,0,0,0.56),rgba(0,0,0,0.9)_72%)]" />
+      <div className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(circle_at_50%_42%,rgba(95,47,180,0.24),transparent_45%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.24),transparent_36%),radial-gradient(circle_at_50%_82%,rgba(0,0,0,0.45),rgba(0,0,0,0.82)_72%)]" />
       <div className="pointer-events-none fixed inset-0 z-[2] opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
 
       <div
