@@ -166,7 +166,7 @@ function MatryoshkaModel({
     }
 
     const elapsed = state.clock.getElapsedTime();
-    const targetY = -0.4 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
+    const targetY = -0.22 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
     const targetScale = 1 + Math.sin(elapsed * 1.65) * 0.005 + openProgress * 0.1;
     const targetPitch = Math.sin(elapsed * 0.55) * 0.02 + openProgress * THREE.MathUtils.degToRad(3);
 
@@ -179,7 +179,7 @@ function MatryoshkaModel({
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.4, 0]}>
+    <group ref={groupRef} position={[0, -0.22, 0]}>
       <primitive object={model} />
       <HologramRing openProgress={openProgress} />
     </group>
@@ -192,8 +192,8 @@ function Scene({ openProgress }: { openProgress: number }) {
 
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
-    cam.position.set(0, 0.08, cameraZ);
-    cam.lookAt(0, -0.2, 0);
+    cam.position.set(0, 0.16, cameraZ);
+    cam.lookAt(0, -0.05, 0);
     cam.updateProjectionMatrix();
   }, [camera, cameraZ]);
 
@@ -225,13 +225,13 @@ function Scene({ openProgress }: { openProgress: number }) {
         rotateSpeed={0.7}
         minPolarAngle={THREE.MathUtils.degToRad(62)}
         maxPolarAngle={THREE.MathUtils.degToRad(118)}
-        target={[0, -0.2, 0]}
+        target={[0, -0.05, 0]}
       />
 
       <ContactShadows
-        position={[0, -1.55, 0]}
+        position={[0, -1.45, 0]}
         opacity={0.62}
-        scale={5}
+        scale={4.8}
         blur={2.2}
         far={4}
         color="#170d22"
@@ -386,7 +386,7 @@ export function LandingHero3D() {
       <Canvas
         className="fixed inset-0 z-0"
         style={{ width: "100vw", height: "100vh", background: "transparent" }}
-        camera={{ position: [0, 0.08, 1.5], fov: 42 }}
+        camera={{ position: [0, 0.16, 1.5], fov: 42 }}
         dpr={[1, 1.5]}
         gl={{ alpha: true, antialias: true }}
         onCreated={({ gl }) => {
@@ -398,8 +398,7 @@ export function LandingHero3D() {
         <Scene openProgress={leaving ? 1 : 0} />
       </Canvas>
 
-      <div className="pointer-events-none fixed inset-0 z-[1] bg-[#060608]" />
-      <div className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(circle_at_50%_42%,rgba(95,47,180,0.26),transparent_43%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.24),transparent_34%),radial-gradient(circle_at_50%_82%,rgba(0,0,0,0.84),rgba(0,0,0,0.99)_72%)]" />
+      <div className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(circle_at_50%_42%,rgba(95,47,180,0.2),transparent_44%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.2),transparent_35%),radial-gradient(circle_at_50%_82%,rgba(0,0,0,0.56),rgba(0,0,0,0.9)_72%)]" />
       <div className="pointer-events-none fixed inset-0 z-[2] opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
 
       <div
