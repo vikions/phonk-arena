@@ -107,6 +107,16 @@ function sumWei(a: string, b: string): string {
   }
 }
 
+function formatCountdown(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(
+    seconds,
+  ).padStart(2, "0")}`;
+}
+
 export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -143,6 +153,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const epochEnd = useMemo(() => getEpochEndTimestampSec(now), [now]);
   const epochSecondsLeft = Math.max(0, epochEnd - Math.floor(now / 1000));
   const epochEnded = epochSecondsLeft <= 0;
+  const epochCountdown = useMemo(() => formatCountdown(epochSecondsLeft), [epochSecondsLeft]);
 
   const { data: onchainTallyRaw, refetch: refetchOnchainTally } = useReadContract({
     address: epochArenaAddress,
@@ -703,6 +714,12 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
             Total clips played: {match.totalClipsPlayed}
           </span>
           <span className="rounded-full border border-white/20 px-3 py-1">Match ID: {match.matchId}</span>
+          <span className="rounded-full border border-white/20 px-3 py-1">
+            Epoch #{currentEpochIdNumber}: {epochCountdown}
+          </span>
+          <span className="rounded-full border border-white/20 px-3 py-1">
+            Epoch status: {epochEnded ? "Ended" : "Open"}
+          </span>
         </div>
       </section>
 
@@ -854,7 +871,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
               Vote goes on-chain to Monad. Tally is read from contract every 5 seconds.
             </p>
             <p className="mt-1 text-xs text-white/70">
-              Epoch #{currentEpochIdNumber} ends in {epochSecondsLeft}s
+              Epoch #{currentEpochIdNumber} ends in {epochCountdown}
             </p>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -961,7 +978,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
             <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Claim</h3>
             <p className="mt-2 text-xs text-white/70">
-              Claim after epoch finalization. Off-chain mirror marks claimed after tx.
+              Claim after on-chain epoch finalization. Off-chain mirror marks claimed after tx.
             </p>
             <p className="mt-2 text-xs text-white/80">
               Claimable epochs: {match.claimableEpochIds.length > 0 ? match.claimableEpochIds.join(", ") : "none"}
