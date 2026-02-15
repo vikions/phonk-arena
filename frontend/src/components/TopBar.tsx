@@ -11,9 +11,6 @@ export function TopBar() {
           <Link href="/" className="font-display text-lg uppercase tracking-[0.18em] text-cyan-200">
             Phonk Arena
           </Link>
-          <Link href="/lobbies" className="text-sm text-white/75 transition hover:text-cyan-100">
-            Lobbies
-          </Link>
         </div>
 
         <div className="flex items-center gap-3">

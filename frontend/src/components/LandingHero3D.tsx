@@ -16,7 +16,7 @@ import { HowItWorksModal } from "@/components/HowItWorksModal";
 const SOUND_PREF_KEY = "phonk_arena_landing_sound_enabled";
 const DEFAULT_VOLUME = 0.35;
 const ENTER_TRANSITION_MS = 350;
-const TARGET_MODEL_HEIGHT = 2.05;
+const TARGET_MODEL_HEIGHT = 2.2;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -123,7 +123,7 @@ function MatryoshkaModel({
     model.position.set(-center.x, -center.y, -center.z);
     model.scale.setScalar(fitScale);
 
-    const suggestedCameraZ = clamp(2.35 + scaledDepth * 0.26, 2.35, 2.9);
+    const suggestedCameraZ = clamp(2.4 + scaledDepth * 0.24, 2.4, 2.95);
     onFit(suggestedCameraZ);
 
     let meshIndex = 0;
@@ -166,7 +166,7 @@ function MatryoshkaModel({
     }
 
     const elapsed = state.clock.getElapsedTime();
-    const targetY = -0.16 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
+    const targetY = -0.28 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
     const targetScale = 1 + Math.sin(elapsed * 1.65) * 0.005 + openProgress * 0.1;
     const targetPitch = Math.sin(elapsed * 0.55) * 0.02 + openProgress * THREE.MathUtils.degToRad(3);
 
@@ -179,7 +179,7 @@ function MatryoshkaModel({
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.16, 0]}>
+    <group ref={groupRef} position={[0, -0.28, 0]}>
       <primitive object={model} />
       <HologramRing openProgress={openProgress} />
     </group>
@@ -193,7 +193,7 @@ function Scene({ openProgress }: { openProgress: number }) {
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
     cam.position.set(0, 0.1, cameraZ);
-    cam.lookAt(0, -0.1, 0);
+    cam.lookAt(0, -0.18, 0);
     cam.updateProjectionMatrix();
   }, [camera, cameraZ]);
 
@@ -226,7 +226,7 @@ function Scene({ openProgress }: { openProgress: number }) {
         rotateSpeed={0.7}
         minPolarAngle={THREE.MathUtils.degToRad(62)}
         maxPolarAngle={THREE.MathUtils.degToRad(118)}
-        target={[0, -0.1, 0]}
+        target={[0, -0.18, 0]}
       />
 
       <ContactShadows
@@ -251,8 +251,6 @@ export function LandingHero3D() {
   const [leaving, setLeaving] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [awaitingInteraction, setAwaitingInteraction] = useState(false);
-  const [audioPlaying, setAudioPlaying] = useState(false);
-
   const stopAudio = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) {
@@ -260,7 +258,6 @@ export function LandingHero3D() {
     }
 
     audio.pause();
-    setAudioPlaying(false);
     setAwaitingInteraction(false);
   }, []);
 
@@ -274,10 +271,8 @@ export function LandingHero3D() {
 
     try {
       await audio.play();
-      setAudioPlaying(true);
       setAwaitingInteraction(false);
     } catch {
-      setAudioPlaying(false);
       setAwaitingInteraction(true);
     }
   }, []);
@@ -412,15 +407,11 @@ export function LandingHero3D() {
             entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
           }`}
         >
-          <div className="pointer-events-none mx-auto mb-6 w-fit rounded-full border border-fuchsia-300/30 bg-black/35 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-fuchsia-200/80 backdrop-blur-md">
-            Phonk Arena Artifact MA-01
-          </div>
-
           <p className="font-display text-3xl uppercase tracking-[0.2em] text-white sm:text-5xl">
             PHONK ARENA
           </p>
           <p className="mt-2 text-xs uppercase tracking-[0.17em] text-white/72 sm:text-sm">
-            Autonomous Agents Battling On-Chain
+            Autonomous Agents Battling on MONAD
           </p>
 
           <div className="pointer-events-auto mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -434,14 +425,6 @@ export function LandingHero3D() {
             </button>
             <HowItWorksModal />
           </div>
-
-          <p className="mt-3 text-[11px] text-white/65 sm:text-xs">
-            {audioPlaying
-              ? "Landing phonk is playing."
-              : awaitingInteraction
-                ? "Tap once anywhere to unlock audio."
-                : "Sound is currently off."}
-          </p>
         </div>
       </div>
 
