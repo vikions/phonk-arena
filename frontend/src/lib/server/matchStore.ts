@@ -10,11 +10,14 @@ import type {
   AgentState,
   AgentStrategy,
   AgentStyle,
+  BetResult,
   ClipHistoryItem,
   ClipVoteTally,
+  EpochHistoryEntry,
   LobbyId,
   MatchSnapshot,
   NowPlayingClip,
+  ViewerBetSnapshot,
   VoteResult,
   VoteSide,
   VoteWinner,
@@ -24,6 +27,12 @@ const CLIP_DURATION_MS = 10_000;
 const LISTENER_TTL_MS = 30_000;
 const HISTORY_LIMIT = 10;
 const VOTE_RETENTION_CLIPS = 30;
+const EPOCH_HISTORY_LIMIT = 5;
+const EPOCH_DURATION_SECONDS = 3_600;
+const EPOCH_DURATION_MS = EPOCH_DURATION_SECONDS * 1_000;
+const DEFAULT_BANKROLL = 100;
+const EPOCH_REWARD_FACTOR = 3.5;
+const EPOCH_PENALTY_FACTOR = 2.2;
 
 interface RuntimeAgent {
   id: AgentId;
@@ -36,6 +45,10 @@ interface RuntimeAgent {
   volatility: number;
   tempoPressure: number;
   mutationSensitivity: number;
+  bankroll: number;
+  riskLevel: number;
+  winCount: number;
+  lossCount: number;
   clipsPlayed: number;
   wins: number;
   losses: number;
@@ -57,6 +70,22 @@ interface LoopState {
   processedClipCount: number;
 }
 
+interface StoredEpochAggregate {
+  epochId: number;
+  votesA: number;
+  votesB: number;
+  totalBetAWei: string;
+  totalBetBWei: string;
+  winner: VoteWinner | null;
+  finalizedAt: number | null;
+}
+
+interface StoredUserEpochBet {
+  amountAWei: string;
+  amountBWei: string;
+  claimed: boolean;
+}
+
 interface StoredLobbyState {
   lobbyId: LobbyId;
   matchId: string;
@@ -65,6 +94,10 @@ interface StoredLobbyState {
   agents: Record<AgentId, RuntimeAgent>;
   clipHistory: ClipHistoryItem[];
   votesByClip: Record<string, ClipVoteState>;
+  epochAggregates: Record<string, StoredEpochAggregate>;
+  userBetsByEpoch: Record<string, Record<string, StoredUserEpochBet>>;
+  epochHistory: EpochHistoryEntry[];
+  lastEpochId: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -146,6 +179,47 @@ function makeMatchId(lobbyId: LobbyId): string {
   return `${base}-${lobbyId.toUpperCase()}`;
 }
 
+function epochIdFromMs(now: number): number {
+  return Math.floor(now / 1000 / EPOCH_DURATION_SECONDS);
+}
+
+function epochStartMs(epochId: number): number {
+  return epochId * EPOCH_DURATION_MS;
+}
+
+function epochEndMs(epochId: number): number {
+  return (epochId + 1) * EPOCH_DURATION_MS;
+}
+
+function epochKey(epochId: number): string {
+  return String(epochId);
+}
+
+function isAddressLike(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function normalizeAddress(value: string | undefined): string | null {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return isAddressLike(normalized) ? normalized : null;
+}
+
+function isWeiLike(value: string): boolean {
+  return /^[0-9]+$/.test(value);
+}
+
+function safeWei(value: unknown): string {
+  if (typeof value !== "string") {
+    return "0";
+  }
+
+  return isWeiLike(value) ? value : "0";
+}
+
+function addWei(a: string, b: string): string {
+  return (BigInt(safeWei(a)) + BigInt(safeWei(b))).toString();
+}
+
 function createRuntimeAgent(
   agentId: AgentId,
   lobbyId: LobbyId,
@@ -160,6 +234,8 @@ function createRuntimeAgent(
   const stylePush = params.baseStyle === "HARD" ? 0.06 : -0.05;
   const strategyPush =
     params.strategy === "AGGRESSIVE" ? 0.08 : params.strategy === "SAFE" ? -0.04 : 0.01;
+  const riskBase =
+    params.strategy === "AGGRESSIVE" ? 0.62 : params.strategy === "SAFE" ? 0.34 : 0.5;
 
   return {
     id: agentId,
@@ -185,6 +261,10 @@ function createRuntimeAgent(
       0.1,
       1,
     ),
+    bankroll: DEFAULT_BANKROLL,
+    riskLevel: clamp(riskBase, 0.08, 0.99),
+    winCount: 0,
+    lossCount: 0,
     clipsPlayed: 0,
     wins: 0,
     losses: 0,
@@ -211,8 +291,21 @@ function defaultLoopState(): LoopState {
   };
 }
 
+function emptyEpochAggregate(epochId: number): StoredEpochAggregate {
+  return {
+    epochId,
+    votesA: 0,
+    votesB: 0,
+    totalBetAWei: "0",
+    totalBetBWei: "0",
+    winner: null,
+    finalizedAt: null,
+  };
+}
+
 function defaultLobbyState(lobbyId: LobbyId): StoredLobbyState {
   const now = Date.now();
+  const currentEpochId = epochIdFromMs(now);
 
   return {
     lobbyId,
@@ -222,6 +315,12 @@ function defaultLobbyState(lobbyId: LobbyId): StoredLobbyState {
     agents: makeInitialAgents(lobbyId),
     clipHistory: [],
     votesByClip: {},
+    epochAggregates: {
+      [epochKey(currentEpochId)]: emptyEpochAggregate(currentEpochId),
+    },
+    userBetsByEpoch: {},
+    epochHistory: [],
+    lastEpochId: currentEpochId,
     createdAt: now,
     updatedAt: now,
   };
@@ -287,6 +386,22 @@ function sanitizeAgent(input: unknown, fallback: RuntimeAgent, lobbyId: LobbyId)
       typeof source.mutationSensitivity === "number"
         ? clamp(source.mutationSensitivity, 0.08, 1)
         : fallback.mutationSensitivity,
+    bankroll:
+      typeof source.bankroll === "number"
+        ? Math.max(0, source.bankroll)
+        : fallback.bankroll,
+    riskLevel:
+      typeof source.riskLevel === "number"
+        ? clamp(source.riskLevel, 0.08, 0.99)
+        : fallback.riskLevel,
+    winCount:
+      typeof source.winCount === "number"
+        ? Math.max(0, Math.floor(source.winCount))
+        : fallback.winCount,
+    lossCount:
+      typeof source.lossCount === "number"
+        ? Math.max(0, Math.floor(source.lossCount))
+        : fallback.lossCount,
     clipsPlayed:
       typeof source.clipsPlayed === "number"
         ? Math.max(0, Math.floor(source.clipsPlayed))
@@ -324,10 +439,6 @@ function sanitizeLoop(input: unknown): LoopState {
   };
 }
 
-function isAddressLike(value: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(value);
-}
-
 function sanitizeVoteState(input: unknown): Record<string, ClipVoteState> {
   if (!input || typeof input !== "object") {
     return {};
@@ -346,12 +457,13 @@ function sanitizeVoteState(input: unknown): Record<string, ClipVoteState> {
     let bVotes = 0;
 
     for (const [address, side] of Object.entries(state.votes ?? {})) {
-      if (!isAddressLike(address)) {
+      const normalized = normalizeAddress(address);
+      if (!normalized) {
         continue;
       }
 
       if (side === "A" || side === "B") {
-        votes[address.toLowerCase()] = side;
+        votes[normalized] = side;
         if (side === "A") {
           aVotes += 1;
         } else {
@@ -411,12 +523,16 @@ function sanitizeClipHistory(input: unknown): ClipHistoryItem[] {
           : "TIE",
     };
 
+    const startedAt = typeof item.startedAt === "number" ? item.startedAt : Date.now();
+
     history.push({
       clipId: item.clipId,
       clipIndex: Math.max(0, Math.floor(item.clipIndex)),
+      epochId:
+        typeof item.epochId === "number" ? Math.max(0, Math.floor(item.epochId)) : epochIdFromMs(startedAt),
       agentId: item.agentId,
       seed: typeof item.seed === "string" ? item.seed : "",
-      startedAt: typeof item.startedAt === "number" ? item.startedAt : Date.now(),
+      startedAt,
       endedAt: typeof item.endedAt === "number" ? item.endedAt : Date.now(),
       style: item.style === "HARD" || item.style === "SOFT" ? item.style : "HARD",
       strategy:
@@ -440,6 +556,149 @@ function sanitizeClipHistory(input: unknown): ClipHistoryItem[] {
   return history.slice(0, HISTORY_LIMIT);
 }
 
+function sanitizeEpochAggregate(input: unknown, epochId: number): StoredEpochAggregate {
+  if (!input || typeof input !== "object") {
+    return emptyEpochAggregate(epochId);
+  }
+
+  const source = input as Partial<StoredEpochAggregate>;
+  return {
+    epochId,
+    votesA: typeof source.votesA === "number" ? Math.max(0, Math.floor(source.votesA)) : 0,
+    votesB: typeof source.votesB === "number" ? Math.max(0, Math.floor(source.votesB)) : 0,
+    totalBetAWei: safeWei(source.totalBetAWei),
+    totalBetBWei: safeWei(source.totalBetBWei),
+    winner:
+      source.winner === "A" || source.winner === "B" || source.winner === "TIE"
+        ? source.winner
+        : null,
+    finalizedAt: typeof source.finalizedAt === "number" ? source.finalizedAt : null,
+  };
+}
+
+function sanitizeEpochAggregates(input: unknown): Record<string, StoredEpochAggregate> {
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+
+  const output: Record<string, StoredEpochAggregate> = {};
+  for (const [key, value] of Object.entries(input)) {
+    const parsed = Number(key);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      continue;
+    }
+
+    output[key] = sanitizeEpochAggregate(value, Math.floor(parsed));
+  }
+
+  return output;
+}
+
+function sanitizeUserBets(input: unknown): Record<string, Record<string, StoredUserEpochBet>> {
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+
+  const output: Record<string, Record<string, StoredUserEpochBet>> = {};
+
+  for (const [epoch, value] of Object.entries(input)) {
+    if (!value || typeof value !== "object") {
+      continue;
+    }
+
+    const epochBets: Record<string, StoredUserEpochBet> = {};
+    for (const [address, betValue] of Object.entries(value)) {
+      const normalized = normalizeAddress(address);
+      if (!normalized || !betValue || typeof betValue !== "object") {
+        continue;
+      }
+
+      const source = betValue as Partial<StoredUserEpochBet>;
+      epochBets[normalized] = {
+        amountAWei: safeWei(source.amountAWei),
+        amountBWei: safeWei(source.amountBWei),
+        claimed: Boolean(source.claimed),
+      };
+    }
+
+    output[epoch] = epochBets;
+  }
+
+  return output;
+}
+
+function sanitizeEpochHistory(input: unknown): EpochHistoryEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const output: EpochHistoryEntry[] = [];
+
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+
+    const item = raw as Partial<EpochHistoryEntry>;
+    if (
+      typeof item.epochId !== "number" ||
+      (item.winner !== "A" && item.winner !== "B" && item.winner !== "TIE")
+    ) {
+      continue;
+    }
+
+    output.push({
+      epochId: Math.max(0, Math.floor(item.epochId)),
+      winner: item.winner,
+      votesA: typeof item.votesA === "number" ? Math.max(0, Math.floor(item.votesA)) : 0,
+      votesB: typeof item.votesB === "number" ? Math.max(0, Math.floor(item.votesB)) : 0,
+      totalBetAWei: safeWei(item.totalBetAWei),
+      totalBetBWei: safeWei(item.totalBetBWei),
+      timestamp: typeof item.timestamp === "number" ? item.timestamp : Date.now(),
+      agentPerformance: {
+        A: {
+          bankroll:
+            typeof item.agentPerformance?.A?.bankroll === "number"
+              ? item.agentPerformance.A.bankroll
+              : DEFAULT_BANKROLL,
+          wins:
+            typeof item.agentPerformance?.A?.wins === "number"
+              ? Math.max(0, Math.floor(item.agentPerformance.A.wins))
+              : 0,
+          losses:
+            typeof item.agentPerformance?.A?.losses === "number"
+              ? Math.max(0, Math.floor(item.agentPerformance.A.losses))
+              : 0,
+          riskLevel:
+            typeof item.agentPerformance?.A?.riskLevel === "number"
+              ? clamp(item.agentPerformance.A.riskLevel, 0.08, 0.99)
+              : 0.5,
+        },
+        B: {
+          bankroll:
+            typeof item.agentPerformance?.B?.bankroll === "number"
+              ? item.agentPerformance.B.bankroll
+              : DEFAULT_BANKROLL,
+          wins:
+            typeof item.agentPerformance?.B?.wins === "number"
+              ? Math.max(0, Math.floor(item.agentPerformance.B.wins))
+              : 0,
+          losses:
+            typeof item.agentPerformance?.B?.losses === "number"
+              ? Math.max(0, Math.floor(item.agentPerformance.B.losses))
+              : 0,
+          riskLevel:
+            typeof item.agentPerformance?.B?.riskLevel === "number"
+              ? clamp(item.agentPerformance.B.riskLevel, 0.08, 0.99)
+              : 0.5,
+        },
+      },
+    });
+  }
+
+  return output.slice(0, EPOCH_HISTORY_LIMIT);
+}
+
 function hydrateLobbyState(lobbyId: LobbyId, raw: unknown): StoredLobbyState {
   const fallback = defaultLobbyState(lobbyId);
 
@@ -448,6 +707,11 @@ function hydrateLobbyState(lobbyId: LobbyId, raw: unknown): StoredLobbyState {
   }
 
   const source = raw as Partial<StoredLobbyState>;
+  const nowEpoch = epochIdFromMs(Date.now());
+  const epochAggregates = sanitizeEpochAggregates(source.epochAggregates);
+  if (!epochAggregates[epochKey(nowEpoch)]) {
+    epochAggregates[epochKey(nowEpoch)] = emptyEpochAggregate(nowEpoch);
+  }
 
   return {
     lobbyId,
@@ -460,6 +724,11 @@ function hydrateLobbyState(lobbyId: LobbyId, raw: unknown): StoredLobbyState {
     },
     clipHistory: sanitizeClipHistory(source.clipHistory),
     votesByClip: sanitizeVoteState(source.votesByClip),
+    epochAggregates,
+    userBetsByEpoch: sanitizeUserBets(source.userBetsByEpoch),
+    epochHistory: sanitizeEpochHistory(source.epochHistory),
+    lastEpochId:
+      typeof source.lastEpochId === "number" ? Math.max(0, Math.floor(source.lastEpochId)) : nowEpoch,
     createdAt: typeof source.createdAt === "number" ? source.createdAt : fallback.createdAt,
     updatedAt: typeof source.updatedAt === "number" ? source.updatedAt : fallback.updatedAt,
   };
@@ -516,6 +785,19 @@ function getActiveElapsedMs(state: StoredLobbyState, now: number): number {
   return state.loop.runStartElapsedMs + (now - state.loop.runStartedAt);
 }
 
+function ensureEpochAggregate(state: StoredLobbyState, epochId: number): StoredEpochAggregate {
+  const key = epochKey(epochId);
+  const existing = state.epochAggregates[key];
+
+  if (existing) {
+    return existing;
+  }
+
+  const created = emptyEpochAggregate(epochId);
+  state.epochAggregates[key] = created;
+  return created;
+}
+
 function computeClipPlan(state: StoredLobbyState, agent: RuntimeAgent, clipIndex: number): ClipPlan {
   const lobby = getLobbyConfig(state.lobbyId);
   const seed = `${state.lobbyId}:${state.matchId}:${clipIndex}:${agent.id}`;
@@ -539,12 +821,19 @@ function computeClipPlan(state: StoredLobbyState, agent: RuntimeAgent, clipIndex
   const strategyBias =
     agent.strategy === "AGGRESSIVE" ? 0.09 : agent.strategy === "SAFE" ? -0.04 : 0.01;
   const confidenceBias = (agent.confidence - 0.5) * 0.26;
+  const riskBias = (agent.riskLevel - 0.5) * 0.2;
   const volatilitySwing = (rand() - 0.5) * agent.volatility * 0.4;
   const chaosSwing = (rand() - 0.5) * lobby.parameters.chaosRate * 0.35;
 
   const intensity = round3(
     clamp(
-      agent.intensityBase + styleBias + strategyBias + confidenceBias + volatilitySwing + chaosSwing,
+      agent.intensityBase +
+        styleBias +
+        strategyBias +
+        confidenceBias +
+        riskBias +
+        volatilitySwing +
+        chaosSwing,
       lobby.parameters.intensityRange.min,
       lobby.parameters.intensityRange.max,
     ),
@@ -556,6 +845,7 @@ function computeClipPlan(state: StoredLobbyState, agent: RuntimeAgent, clipIndex
         agent.mutationSensitivity * 0.35 +
         agent.volatility * 0.2 +
         lobby.parameters.chaosRate * 0.35 +
+        agent.riskLevel * 0.22 +
         rand() * 0.18,
       0,
       1,
@@ -570,6 +860,7 @@ function computeClipPlan(state: StoredLobbyState, agent: RuntimeAgent, clipIndex
         intensity * 12 +
         mutationLevel * 7 +
         (agent.tempoPressure - 0.5) * 10 +
+        (agent.riskLevel - 0.5) * 6 +
         (rand() - 0.5) * 3,
       84,
       148,
@@ -581,6 +872,7 @@ function computeClipPlan(state: StoredLobbyState, agent: RuntimeAgent, clipIndex
       0.46 +
         intensity * 0.34 +
         mutationLevel * 0.28 +
+        (agent.riskLevel - 0.5) * 0.16 +
         lobby.parameters.densityBias +
         (rand() - 0.5) * 0.1,
       0.15,
@@ -594,6 +886,7 @@ function computeClipPlan(state: StoredLobbyState, agent: RuntimeAgent, clipIndex
         intensity * 0.33 +
         mutationLevel * 0.25 +
         (agent.strategy === "AGGRESSIVE" ? 0.08 : 0) +
+        (agent.riskLevel - 0.5) * 0.2 +
         lobby.parameters.chaosRate * 0.16 +
         (rand() - 0.5) * 0.08,
       0.05,
@@ -606,6 +899,7 @@ function computeClipPlan(state: StoredLobbyState, agent: RuntimeAgent, clipIndex
       (style === "SOFT" ? 0.42 : 0.22) +
         lobby.parameters.fxBias +
         mutationLevel * 0.28 +
+        Math.abs(agent.riskLevel - 0.5) * 0.08 +
         (rand() - 0.5) * 0.1,
       0.02,
       0.95,
@@ -675,6 +969,7 @@ function applyLobbyBiasToAgent(
   if (lobbyId === "chaos-lab") {
     agent.volatility = clamp(agent.volatility + (rand() - 0.5) * 0.12, 0.12, 0.99);
     agent.mutationSensitivity = clamp(agent.mutationSensitivity + (rand() - 0.5) * 0.1, 0.1, 1);
+    agent.riskLevel = clamp(agent.riskLevel + (rand() - 0.5) * 0.12, 0.08, 0.99);
 
     if (rand() < 0.22 + lobby.parameters.chaosRate * 0.15) {
       agent.currentStyle = agent.currentStyle === "HARD" ? "SOFT" : "HARD";
@@ -687,6 +982,7 @@ function applyLobbyBiasToAgent(
       lobby.parameters.intensityRange.min,
       lobby.parameters.intensityRange.max,
     );
+    agent.riskLevel = clamp(Math.max(agent.riskLevel, 0.5), 0.08, 0.99);
 
     if (agent.currentStyle === "SOFT" && rand() < 0.3) {
       agent.currentStyle = "HARD";
@@ -699,6 +995,7 @@ function applyLobbyBiasToAgent(
       lobby.parameters.intensityRange.min,
       lobby.parameters.intensityRange.max,
     );
+    agent.riskLevel = clamp(Math.min(agent.riskLevel, 0.6), 0.08, 0.99);
 
     if (agent.currentStyle === "HARD" && rand() < 0.34) {
       agent.currentStyle = "SOFT";
@@ -718,6 +1015,7 @@ function applyOutcomeMutation(
   if (outcome === "TIE") {
     agent.confidence = clamp(agent.confidence + 0.005, 0.1, 0.99);
     agent.volatility = clamp(agent.volatility + (rand() - 0.5) * 0.05, 0.08, 0.98);
+    agent.riskLevel = clamp(agent.riskLevel + (rand() - 0.5) * 0.03, 0.08, 0.99);
     applyLobbyBiasToAgent(state.lobbyId, agent, clipIndex, state.matchId);
     return "Tie on votes: micro-adjustments only.";
   }
@@ -727,6 +1025,7 @@ function applyOutcomeMutation(
   if (agentWon) {
     agent.wins += 1;
     agent.confidence = clamp(agent.confidence + 0.045, 0.1, 0.99);
+    agent.riskLevel = clamp(agent.riskLevel + 0.015, 0.08, 0.99);
     agent.intensityBase = clamp(
       agent.intensityBase + 0.015,
       lobby.parameters.intensityRange.min,
@@ -758,6 +1057,7 @@ function applyOutcomeMutation(
       agent.currentStyle = agent.currentStyle === "HARD" ? "SOFT" : "HARD";
     }
 
+    agent.riskLevel = clamp(agent.riskLevel + 0.02, 0.08, 0.99);
     agent.tempoPressure = clamp(agent.tempoPressure + 0.04, 0.1, 0.99);
     agent.mutationSensitivity = clamp(agent.mutationSensitivity + 0.04, 0.08, 1);
     applyLobbyBiasToAgent(state.lobbyId, agent, clipIndex, state.matchId);
@@ -765,6 +1065,7 @@ function applyOutcomeMutation(
   }
 
   if (agent.strategy === "AGGRESSIVE") {
+    agent.riskLevel = clamp(agent.riskLevel + 0.06, 0.08, 0.99);
     agent.intensityBase = clamp(
       agent.intensityBase + 0.07,
       lobby.parameters.intensityRange.min,
@@ -778,6 +1079,7 @@ function applyOutcomeMutation(
   }
 
   const rangeMid = (lobby.parameters.intensityRange.min + lobby.parameters.intensityRange.max) / 2;
+  agent.riskLevel = clamp(agent.riskLevel - 0.05, 0.08, 0.99);
   agent.volatility = clamp(agent.volatility - 0.08, 0.08, 0.9);
   agent.intensityBase = clamp(
     agent.intensityBase + (rangeMid - agent.intensityBase) * 0.3,
@@ -786,6 +1088,119 @@ function applyOutcomeMutation(
   );
   applyLobbyBiasToAgent(state.lobbyId, agent, clipIndex, state.matchId);
   return "Safe loss: lowered variance and stabilized intensity.";
+}
+
+function applyEpochBankrollMutation(
+  state: StoredLobbyState,
+  agent: RuntimeAgent,
+  winner: VoteWinner,
+  epochId: number,
+): void {
+  const lobby = getLobbyConfig(state.lobbyId);
+  const rand = mulberry32(hashSeed(`${state.matchId}:${epochId}:epoch:${agent.id}`));
+
+  if (winner === "TIE") {
+    agent.confidence = clamp(agent.confidence + 0.005, 0.1, 0.99);
+    agent.riskLevel = clamp(agent.riskLevel + (rand() - 0.5) * 0.03, 0.08, 0.99);
+    return;
+  }
+
+  const won = winner === agent.id;
+  if (won) {
+    agent.bankroll = round3(agent.bankroll + EPOCH_REWARD_FACTOR);
+    agent.winCount += 1;
+    agent.confidence = clamp(agent.confidence + 0.03, 0.1, 0.99);
+    agent.riskLevel = clamp(agent.riskLevel + 0.03, 0.08, 0.99);
+    agent.intensityBase = clamp(
+      agent.intensityBase + 0.015,
+      lobby.parameters.intensityRange.min,
+      lobby.parameters.intensityRange.max,
+    );
+    return;
+  }
+
+  agent.bankroll = round3(Math.max(0, agent.bankroll - EPOCH_PENALTY_FACTOR));
+  agent.lossCount += 1;
+  agent.confidence = clamp(agent.confidence - 0.03, 0.1, 0.99);
+
+  if (agent.strategy === "AGGRESSIVE") {
+    agent.riskLevel = clamp(agent.riskLevel + 0.08, 0.08, 0.99);
+    agent.mutationSensitivity = clamp(agent.mutationSensitivity + 0.05, 0.08, 1);
+    agent.tempoPressure = clamp(agent.tempoPressure + 0.03, 0.1, 0.99);
+    return;
+  }
+
+  if (agent.strategy === "SAFE") {
+    agent.riskLevel = clamp(agent.riskLevel - 0.07, 0.08, 0.99);
+    agent.volatility = clamp(agent.volatility - 0.05, 0.08, 0.9);
+    return;
+  }
+
+  agent.riskLevel = clamp(agent.riskLevel + 0.02, 0.08, 0.99);
+  if (rand() < 0.72) {
+    agent.currentStyle = agent.currentStyle === "HARD" ? "SOFT" : "HARD";
+  }
+}
+
+function finalizeEpochIfNeeded(state: StoredLobbyState, epochId: number, now: number): boolean {
+  const aggregate = ensureEpochAggregate(state, epochId);
+  if (aggregate.finalizedAt !== null) {
+    return false;
+  }
+
+  const winner = tallyWinner(aggregate.votesA, aggregate.votesB);
+  aggregate.winner = winner;
+  aggregate.finalizedAt = now;
+
+  applyEpochBankrollMutation(state, state.agents.A, winner, epochId);
+  applyEpochBankrollMutation(state, state.agents.B, winner, epochId);
+
+  state.epochHistory.unshift({
+    epochId,
+    winner,
+    votesA: aggregate.votesA,
+    votesB: aggregate.votesB,
+    totalBetAWei: aggregate.totalBetAWei,
+    totalBetBWei: aggregate.totalBetBWei,
+    timestamp: now,
+    agentPerformance: {
+      A: {
+        bankroll: round3(state.agents.A.bankroll),
+        wins: state.agents.A.winCount,
+        losses: state.agents.A.lossCount,
+        riskLevel: round3(state.agents.A.riskLevel),
+      },
+      B: {
+        bankroll: round3(state.agents.B.bankroll),
+        wins: state.agents.B.winCount,
+        losses: state.agents.B.lossCount,
+        riskLevel: round3(state.agents.B.riskLevel),
+      },
+    },
+  });
+  state.epochHistory = state.epochHistory.slice(0, EPOCH_HISTORY_LIMIT);
+  return true;
+}
+
+function syncEpochLifecycle(state: StoredLobbyState, now: number): boolean {
+  const currentEpochId = epochIdFromMs(now);
+  ensureEpochAggregate(state, currentEpochId);
+
+  if (state.lastEpochId === null) {
+    state.lastEpochId = currentEpochId;
+    return true;
+  }
+
+  if (currentEpochId <= state.lastEpochId) {
+    return false;
+  }
+
+  for (let epochId = state.lastEpochId; epochId < currentEpochId; epochId += 1) {
+    finalizeEpochIfNeeded(state, epochId, now);
+  }
+
+  state.lastEpochId = currentEpochId;
+  return true;
 }
 
 function toAgentState(agent: RuntimeAgent): AgentState {
@@ -798,6 +1213,10 @@ function toAgentState(agent: RuntimeAgent): AgentState {
     confidence: round3(agent.confidence),
     intensity: round3(agent.intensityBase),
     mutationSensitivity: round3(agent.mutationSensitivity),
+    bankroll: round3(agent.bankroll),
+    riskLevel: round3(agent.riskLevel),
+    winCount: agent.winCount,
+    lossCount: agent.lossCount,
     clipsPlayed: agent.clipsPlayed,
     wins: agent.wins,
     losses: agent.losses,
@@ -891,10 +1310,12 @@ function processCompletedClip(state: StoredLobbyState, clipIndex: number): void 
 
   const clipStartElapsed = clipIndex * CLIP_DURATION_MS;
   const startedAt = state.loop.runStartedAt + (clipStartElapsed - state.loop.runStartElapsedMs);
+  const resolvedEpochId = epochIdFromMs(startedAt);
 
   const historyItem: ClipHistoryItem = {
     clipId,
     clipIndex,
+    epochId: resolvedEpochId,
     agentId,
     seed: plan.seed,
     startedAt,
@@ -971,10 +1392,69 @@ function buildNowPlaying(state: StoredLobbyState, now: number): NowPlayingClip |
   };
 }
 
-function buildSnapshot(state: StoredLobbyState, now: number): MatchSnapshot {
+function buildViewerBetSnapshot(
+  state: StoredLobbyState,
+  currentEpochId: number,
+  viewerAddress?: string,
+): ViewerBetSnapshot | null {
+  const normalized = normalizeAddress(viewerAddress);
+  if (!normalized) {
+    return null;
+  }
+
+  const bet = state.userBetsByEpoch[epochKey(currentEpochId)]?.[normalized];
+  const amountAWei = bet?.amountAWei ?? "0";
+  const amountBWei = bet?.amountBWei ?? "0";
+  const totalWei = addWei(amountAWei, amountBWei);
+
+  return {
+    epochId: currentEpochId,
+    amountAWei,
+    amountBWei,
+    totalWei,
+    hasBet: totalWei !== "0",
+  };
+}
+
+function buildClaimableEpochIds(
+  state: StoredLobbyState,
+  currentEpochId: number,
+  viewerAddress?: string,
+): number[] {
+  const normalized = normalizeAddress(viewerAddress);
+  if (!normalized) {
+    return [];
+  }
+
+  const claimable: number[] = [];
+  for (const [epochRaw, byAddress] of Object.entries(state.userBetsByEpoch)) {
+    const epochId = Number(epochRaw);
+    if (!Number.isFinite(epochId) || epochId >= currentEpochId) {
+      continue;
+    }
+
+    const bet = byAddress[normalized];
+    if (!bet || bet.claimed || addWei(bet.amountAWei, bet.amountBWei) === "0") {
+      continue;
+    }
+
+    if (ensureEpochAggregate(state, epochId).finalizedAt !== null) {
+      claimable.push(epochId);
+    }
+  }
+
+  claimable.sort((a, b) => b - a);
+  return claimable;
+}
+
+function buildSnapshot(state: StoredLobbyState, now: number, viewerAddress?: string): MatchSnapshot {
   const listeners = Object.keys(state.listeners).length;
   const nowPlaying = buildNowPlaying(state, now);
   const currentVoteTally = nowPlaying ? toVoteTally(ensureVoteState(state, nowPlaying.clipId)) : null;
+  const currentEpochId = epochIdFromMs(now);
+  const currentEpoch = ensureEpochAggregate(state, currentEpochId);
+  const viewerBet = buildViewerBetSnapshot(state, currentEpochId, viewerAddress);
+  const claimableEpochIds = buildClaimableEpochIds(state, currentEpochId, viewerAddress);
 
   return {
     lobbyId: state.lobbyId,
@@ -990,19 +1470,39 @@ function buildSnapshot(state: StoredLobbyState, now: number): MatchSnapshot {
     nowPlaying,
     currentVoteTally,
     clipHistory: [...state.clipHistory],
+    currentEpoch: {
+      epochId: currentEpochId,
+      startedAt: epochStartMs(currentEpochId),
+      endsAt: epochEndMs(currentEpochId),
+      isOpen: now < epochEndMs(currentEpochId),
+      isFinalized: currentEpoch.finalizedAt !== null,
+      winner: currentEpoch.winner,
+      votesA: currentEpoch.votesA,
+      votesB: currentEpoch.votesB,
+      totalBetAWei: currentEpoch.totalBetAWei,
+      totalBetBWei: currentEpoch.totalBetBWei,
+    },
+    epochHistory: [...state.epochHistory],
+    viewerBet,
+    claimableEpochIds,
     agents: [toAgentState(state.agents.A), toAgentState(state.agents.B)],
     lastUpdatedAt: now,
   };
 }
 
-async function syncAndSnapshot(state: StoredLobbyState, now: number): Promise<MatchSnapshot> {
+async function syncAndSnapshot(
+  state: StoredLobbyState,
+  now: number,
+  viewerAddress?: string,
+): Promise<MatchSnapshot> {
   const staleChanged = pruneStaleListeners(state, now);
   const simChanged = syncClipSimulation(state, now);
   const loopChanged = applyListenerDrivenLoop(state, now);
+  const epochChanged = syncEpochLifecycle(state, now);
 
-  const snapshot = buildSnapshot(state, now);
+  const snapshot = buildSnapshot(state, now, viewerAddress);
 
-  if (staleChanged || simChanged || loopChanged) {
+  if (staleChanged || simChanged || loopChanged || epochChanged) {
     await writeLobbyState(state);
   }
 
@@ -1017,10 +1517,14 @@ export async function getAllMatchSnapshots(now = Date.now()): Promise<MatchSnaps
   return Promise.all(LOBBY_IDS.map((lobbyId) => getMatchSnapshot(lobbyId, now)));
 }
 
-export async function getMatchSnapshot(lobbyIdInput?: string, now = Date.now()): Promise<MatchSnapshot> {
+export async function getMatchSnapshot(
+  lobbyIdInput?: string,
+  now = Date.now(),
+  viewerAddress?: string,
+): Promise<MatchSnapshot> {
   const lobbyId = resolveLobbyIdOrThrow(lobbyIdInput);
   const state = await loadLobbyState(lobbyId);
-  return syncAndSnapshot(state, now);
+  return syncAndSnapshot(state, now, viewerAddress);
 }
 
 export async function joinPresence(
@@ -1072,8 +1576,8 @@ export async function castVote(input: {
     throw new Error("Invalid vote side.");
   }
 
-  const normalizedAddress = input.address.trim().toLowerCase();
-  if (!isAddressLike(normalizedAddress)) {
+  const normalizedAddress = normalizeAddress(input.address);
+  if (!normalizedAddress) {
     throw new Error("Invalid wallet address.");
   }
 
@@ -1105,6 +1609,13 @@ export async function castVote(input: {
     voteState.bVotes += 1;
   }
 
+  const aggregate = ensureEpochAggregate(state, epochIdFromMs(now));
+  if (input.side === "A") {
+    aggregate.votesA += 1;
+  } else {
+    aggregate.votesB += 1;
+  }
+
   await writeLobbyState(state);
 
   return {
@@ -1117,9 +1628,100 @@ export async function castVote(input: {
   };
 }
 
+export async function registerBet(input: {
+  lobbyId: string;
+  epochId: number;
+  side: VoteSide;
+  amountWei: string;
+  address: string;
+}): Promise<BetResult> {
+  const lobbyId = resolveLobbyIdOrThrow(input.lobbyId);
+  const normalizedAddress = normalizeAddress(input.address);
+
+  if (!normalizedAddress) {
+    throw new Error("Invalid wallet address.");
+  }
+
+  if (input.side !== "A" && input.side !== "B") {
+    throw new Error("Invalid bet side.");
+  }
+
+  if (!isWeiLike(input.amountWei) || BigInt(input.amountWei) <= 0n) {
+    throw new Error("Invalid bet amount.");
+  }
+
+  const state = await loadLobbyState(lobbyId);
+  const now = Date.now();
+  await syncAndSnapshot(state, now);
+
+  const currentEpochId = epochIdFromMs(now);
+  if (currentEpochId !== input.epochId) {
+    throw new Error("Bet epoch mismatch. Refresh and retry.");
+  }
+
+  const aggregate = ensureEpochAggregate(state, currentEpochId);
+  if (input.side === "A") {
+    aggregate.totalBetAWei = addWei(aggregate.totalBetAWei, input.amountWei);
+  } else {
+    aggregate.totalBetBWei = addWei(aggregate.totalBetBWei, input.amountWei);
+  }
+
+  const key = epochKey(currentEpochId);
+  if (!state.userBetsByEpoch[key]) {
+    state.userBetsByEpoch[key] = {};
+  }
+
+  const existing = state.userBetsByEpoch[key][normalizedAddress] ?? {
+    amountAWei: "0",
+    amountBWei: "0",
+    claimed: false,
+  };
+
+  if (input.side === "A") {
+    existing.amountAWei = addWei(existing.amountAWei, input.amountWei);
+  } else {
+    existing.amountBWei = addWei(existing.amountBWei, input.amountWei);
+  }
+  existing.claimed = false;
+
+  state.userBetsByEpoch[key][normalizedAddress] = existing;
+  await writeLobbyState(state);
+
+  return {
+    lobbyId,
+    epochId: currentEpochId,
+    totalBetAWei: aggregate.totalBetAWei,
+    totalBetBWei: aggregate.totalBetBWei,
+    userAmountAWei: existing.amountAWei,
+    userAmountBWei: existing.amountBWei,
+  };
+}
+
+export async function markClaimed(input: {
+  lobbyId: string;
+  epochId: number;
+  address: string;
+}): Promise<void> {
+  const lobbyId = resolveLobbyIdOrThrow(input.lobbyId);
+  const normalizedAddress = normalizeAddress(input.address);
+  if (!normalizedAddress) {
+    throw new Error("Invalid wallet address.");
+  }
+
+  const state = await loadLobbyState(lobbyId);
+  const key = epochKey(input.epochId);
+  if (!state.userBetsByEpoch[key] || !state.userBetsByEpoch[key][normalizedAddress]) {
+    return;
+  }
+
+  state.userBetsByEpoch[key][normalizedAddress].claimed = true;
+  await writeLobbyState(state);
+}
+
 async function resetLobbyState(lobbyId: LobbyId, clearListeners: boolean): Promise<MatchSnapshot> {
   const state = await loadLobbyState(lobbyId);
   const now = Date.now();
+  const currentEpochId = epochIdFromMs(now);
 
   if (clearListeners) {
     state.listeners = {};
@@ -1129,6 +1731,12 @@ async function resetLobbyState(lobbyId: LobbyId, clearListeners: boolean): Promi
   state.clipHistory = [];
   state.votesByClip = {};
   state.loop = defaultLoopState();
+  state.epochAggregates = {
+    [epochKey(currentEpochId)]: emptyEpochAggregate(currentEpochId),
+  };
+  state.userBetsByEpoch = {};
+  state.epochHistory = [];
+  state.lastEpochId = currentEpochId;
 
   await writeLobbyState(state);
 

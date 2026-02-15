@@ -9,8 +9,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const lobbyId = searchParams.get("lobbyId") ?? undefined;
   const includeAll = searchParams.get("all") === "1";
+  const address = searchParams.get("address") ?? undefined;
 
-  const payload = includeAll ? await getAllMatchSnapshots() : await getMatchSnapshot(lobbyId);
+  const payload = includeAll ? await getAllMatchSnapshots() : await getMatchSnapshot(lobbyId, Date.now(), address);
 
   return NextResponse.json(payload, {
     headers: {

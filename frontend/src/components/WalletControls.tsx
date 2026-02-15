@@ -6,10 +6,12 @@ import {
   useChainId,
   useConnect,
   useDisconnect,
+  useWalletClient,
   useSwitchChain,
 } from "wagmi";
 
 import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
+import { ensureMonadNetwork } from "@/lib/walletNetwork";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -21,6 +23,7 @@ export function WalletControls() {
   const { connect, connectors, error: connectError, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
 
   const injectedConnector = useMemo(
     () => connectors.find((connector) => connector.type === "injected") ?? connectors[0],
@@ -56,7 +59,11 @@ export function WalletControls() {
         <button
           type="button"
           className="rounded-full border border-amber-300/60 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/25 disabled:opacity-60"
-          onClick={() => switchChain({ chainId: MONAD_MAINNET_CHAIN_ID })}
+          onClick={() => {
+            void ensureMonadNetwork(walletClient).catch(() => {
+              switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
+            });
+          }}
           disabled={isSwitching}
         >
           {isSwitching ? "Switching..." : "Switch to Monad"}

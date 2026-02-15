@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatEther, parseEther } from "viem";
 import {
   useAccount,
   useChainId,
   useReadContract,
   useSwitchChain,
+  useWalletClient,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
@@ -20,6 +22,7 @@ import {
   voteSideToContractSide,
 } from "@/lib/contract";
 import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
+import { ensureMonadNetwork } from "@/lib/walletNetwork";
 import type { LobbyId, MatchSnapshot, VoteSide } from "@/lib/types";
 
 interface LobbyBattleClientProps {
@@ -83,10 +86,31 @@ function parseTally(data: unknown): { aVotes: number; bVotes: number } | null {
   return null;
 }
 
+function formatMon(wei: string, maxFraction = 4): string {
+  try {
+    const value = Number(formatEther(BigInt(wei)));
+    if (!Number.isFinite(value)) {
+      return "0";
+    }
+    return value.toFixed(Math.min(maxFraction, value >= 1 ? 3 : 4));
+  } catch {
+    return "0";
+  }
+}
+
+function sumWei(a: string, b: string): string {
+  try {
+    return (BigInt(a) + BigInt(b)).toString();
+  } catch {
+    return "0";
+  }
+}
+
 export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { switchChain, switchChainAsync, isPending: isSwitching } = useSwitchChain();
+  const { switchChain, isPending: isSwitching } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
 
   const [match, setMatch] = useState<MatchSnapshot | null>(null);
@@ -97,6 +121,13 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [voteTxHash, setVoteTxHash] = useState<`0x${string}` | undefined>(undefined);
+  const [betAmount, setBetAmount] = useState("0.05");
+  const [betBusy, setBetBusy] = useState(false);
+  const [betError, setBetError] = useState<string | null>(null);
+  const [betTxHash, setBetTxHash] = useState<`0x${string}` | undefined>(undefined);
+  const [claimBusy, setClaimBusy] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimTxHash, setClaimTxHash] = useState<`0x${string}` | undefined>(undefined);
   const [now, setNow] = useState(() => Date.now());
 
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -135,6 +166,20 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     hash: voteTxHash,
     query: {
       enabled: Boolean(voteTxHash),
+    },
+  });
+
+  const { isLoading: betConfirming } = useWaitForTransactionReceipt({
+    hash: betTxHash,
+    query: {
+      enabled: Boolean(betTxHash),
+    },
+  });
+
+  const { isLoading: claimConfirming } = useWaitForTransactionReceipt({
+    hash: claimTxHash,
+    query: {
+      enabled: Boolean(claimTxHash),
     },
   });
 
@@ -180,7 +225,14 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   }, [lobbyId]);
 
   const fetchMatch = useCallback(async () => {
-    const response = await fetch(`/api/match?lobbyId=${encodeURIComponent(lobbyId)}`, {
+    const query = new URLSearchParams({
+      lobbyId,
+    });
+    if (address) {
+      query.set("address", address);
+    }
+
+    const response = await fetch(`/api/match?${query.toString()}`, {
       cache: "no-store",
     });
 
@@ -190,7 +242,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
     const data = (await response.json()) as MatchSnapshot;
     setMatch(data);
-  }, [lobbyId]);
+  }, [address, lobbyId]);
 
   useEffect(() => {
     let stopped = false;
@@ -356,6 +408,15 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   }, [match?.nowPlaying, now]);
 
   const currentClipId = match?.nowPlaying?.clipId ?? null;
+  const currentEpochIdNumber = match?.currentEpoch.epochId ?? Number(currentEpochId);
+  let parsedBetWei: bigint | null = null;
+  try {
+    parsedBetWei = parseEther(betAmount.trim() || "0");
+  } catch {
+    parsedBetWei = null;
+  }
+
+  const hasValidBetAmount = parsedBetWei !== null && parsedBetWei > 0n;
   const canVote =
     Boolean(match?.nowPlaying) &&
     Boolean(address) &&
@@ -363,6 +424,34 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     !hasVotedOnchain &&
     !voteBusy &&
     !voteConfirming;
+  const canBet =
+    Boolean(address) &&
+    !epochEnded &&
+    !betBusy &&
+    !betConfirming &&
+    hasValidBetAmount;
+  const claimableEpochId = match?.claimableEpochIds?.[0];
+  const canClaim =
+    typeof claimableEpochId === "number" &&
+    Boolean(address) &&
+    !claimBusy &&
+    !claimConfirming;
+
+  const ensureWalletOnMonad = useCallback(async () => {
+    if (chainId === MONAD_MAINNET_CHAIN_ID) {
+      return;
+    }
+
+    try {
+      await ensureMonadNetwork(walletClient);
+      return;
+    } catch {
+      if (switchChain) {
+        switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
+      }
+      throw new Error("Switch to Monad mainnet in wallet and retry.");
+    }
+  }, [chainId, switchChain, walletClient]);
 
   const submitVote = useCallback(
     async (side: VoteSide) => {
@@ -374,18 +463,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       setVoteError(null);
 
       try {
-        if (chainId !== MONAD_MAINNET_CHAIN_ID) {
-          if (switchChainAsync) {
-            await switchChainAsync({ chainId: MONAD_MAINNET_CHAIN_ID });
-          } else if (switchChain) {
-            switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
-            await new Promise((resolve) => {
-              setTimeout(resolve, 500);
-            });
-          } else {
-            throw new Error("Cannot switch network automatically. Please switch to Monad in wallet.");
-          }
-        }
+        await ensureWalletOnMonad();
 
         const hash = await writeContractAsync({
           address: epochArenaAddress,
@@ -428,20 +506,126 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       }
     },
     [
-      chainId,
       address,
       canVote,
+      ensureWalletOnMonad,
       fetchMatch,
       lobbyId,
       lobbyIdBytes32,
       match?.nowPlaying,
       refetchHasVoted,
       refetchOnchainTally,
-      switchChain,
-      switchChainAsync,
       writeContractAsync,
     ],
   );
+
+  const submitBet = useCallback(
+    async (side: VoteSide) => {
+      if (!address || !canBet || !parsedBetWei || !match) {
+        return;
+      }
+
+      setBetBusy(true);
+      setBetError(null);
+
+      try {
+        await ensureWalletOnMonad();
+
+        const hash = await writeContractAsync({
+          address: epochArenaAddress,
+          abi: epochArenaAbi,
+          functionName: "placeBet",
+          args: [lobbyIdBytes32, voteSideToContractSide(side)],
+          value: parsedBetWei,
+          chainId: MONAD_MAINNET_CHAIN_ID,
+        });
+
+        setBetTxHash(hash);
+
+        await fetch("/api/bet", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            lobbyId,
+            epochId: currentEpochIdNumber,
+            side,
+            amountWei: parsedBetWei.toString(),
+            address,
+          }),
+        }).catch(() => undefined);
+
+        await fetchMatch();
+      } catch (submitError) {
+        setBetError(submitError instanceof Error ? submitError.message : "Bet failed.");
+      } finally {
+        setBetBusy(false);
+      }
+    },
+    [
+      address,
+      canBet,
+      currentEpochIdNumber,
+      ensureWalletOnMonad,
+      fetchMatch,
+      lobbyId,
+      lobbyIdBytes32,
+      match,
+      parsedBetWei,
+      writeContractAsync,
+    ],
+  );
+
+  const submitClaim = useCallback(async () => {
+    if (!address || !canClaim || typeof claimableEpochId !== "number") {
+      return;
+    }
+
+    setClaimBusy(true);
+    setClaimError(null);
+
+    try {
+      await ensureWalletOnMonad();
+
+      const hash = await writeContractAsync({
+        address: epochArenaAddress,
+        abi: epochArenaAbi,
+        functionName: "claim",
+        args: [lobbyIdBytes32, BigInt(claimableEpochId)],
+        chainId: MONAD_MAINNET_CHAIN_ID,
+      });
+
+      setClaimTxHash(hash);
+
+      await fetch("/api/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lobbyId,
+          epochId: claimableEpochId,
+          address,
+        }),
+      }).catch(() => undefined);
+
+      await fetchMatch();
+    } catch (submitError) {
+      setClaimError(submitError instanceof Error ? submitError.message : "Claim failed.");
+    } finally {
+      setClaimBusy(false);
+    }
+  }, [
+    address,
+    canClaim,
+    claimableEpochId,
+    ensureWalletOnMonad,
+    fetchMatch,
+    lobbyId,
+    lobbyIdBytes32,
+    writeContractAsync,
+  ]);
 
   if (loading && !match) {
     return <p className="text-white/80">Joining lobby {lobbyId}...</p>;
@@ -501,7 +685,11 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           <p>Wallet is on the wrong network.</p>
           <button
             type="button"
-            onClick={() => switchChain({ chainId: MONAD_MAINNET_CHAIN_ID })}
+            onClick={() => {
+              void ensureMonadNetwork(walletClient).catch(() => {
+                switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
+              });
+            }}
             disabled={isSwitching}
             className="mt-2 rounded-lg border border-amber-300/50 px-3 py-1.5 text-xs font-semibold"
           >
@@ -556,9 +744,14 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
                   <p className="mt-1 text-xs text-white/70">
                     Mutation: {(agent.mutationSensitivity * 100).toFixed(0)}%
                   </p>
+                  <p className="mt-1 text-xs text-white/70">Risk: {(agent.riskLevel * 100).toFixed(0)}%</p>
+                  <p className="mt-1 text-xs text-white/70">Bankroll: {agent.bankroll.toFixed(2)} pts</p>
                   <p className="mt-1 text-xs text-white/70">Clips: {agent.clipsPlayed}</p>
                   <p className="mt-1 text-xs text-white/70">
                     W/L: {agent.wins}/{agent.losses}
+                  </p>
+                  <p className="mt-1 text-xs text-white/70">
+                    Epoch W/L: {agent.winCount}/{agent.lossCount}
                   </p>
                 </article>
               );
@@ -580,7 +773,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p>
-                        {shortTime(item.startedAt)} - Agent {item.agentId} - {item.style}
+                        {shortTime(item.startedAt)} - Epoch {item.epochId} - Agent {item.agentId} - {item.style}
                       </p>
                       <p>
                         votes {item.voteTally.aVotes}:{item.voteTally.bVotes} ({item.voteTally.winner})
@@ -620,7 +813,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
               Vote goes on-chain to Monad. Tally is read from contract every 5 seconds.
             </p>
             <p className="mt-1 text-xs text-white/70">
-              Epoch #{currentEpochId.toString()} ends in {epochSecondsLeft}s
+              Epoch #{currentEpochIdNumber} ends in {epochSecondsLeft}s
             </p>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -663,6 +856,116 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
               </p>
             ) : null}
             {voteError ? <p className="mt-2 text-xs text-red-300">{voteError}</p> : null}
+          </section>
+
+          <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
+            <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Bet This Epoch</h3>
+            <p className="mt-2 text-xs text-white/70">Bets stay open until epoch end.</p>
+
+            <div className="mt-3 grid gap-2">
+              <label className="text-xs text-white/70" htmlFor="bet-amount">
+                MON amount
+              </label>
+              <input
+                id="bet-amount"
+                type="number"
+                min="0"
+                step="0.001"
+                value={betAmount}
+                onChange={(event) => setBetAmount(event.target.value)}
+                className="rounded-lg border border-white/20 bg-black/35 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
+              />
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void submitBet("A")}
+                disabled={!canBet}
+                className="rounded-xl border border-cyan-300/35 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Bet Agent A
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitBet("B")}
+                disabled={!canBet}
+                className="rounded-xl border border-red-300/35 bg-red-300/10 px-3 py-2 text-xs font-semibold text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Bet Agent B
+              </button>
+            </div>
+
+            <div className="mt-3 text-xs text-white/80">
+              <p>
+                Total Bet A: {formatMon(match.currentEpoch.totalBetAWei)} MON | Total Bet B:{" "}
+                {formatMon(match.currentEpoch.totalBetBWei)} MON
+              </p>
+              <p>
+                Your epoch bet: {formatMon(match.viewerBet?.totalWei ?? "0")} MON (A{" "}
+                {formatMon(match.viewerBet?.amountAWei ?? "0")} / B{" "}
+                {formatMon(match.viewerBet?.amountBWei ?? "0")})
+              </p>
+              {betTxHash ? <p>Bet tx: {betTxHash}</p> : null}
+            </div>
+
+            {betBusy || betConfirming ? (
+              <p className="mt-2 text-xs text-white/70">
+                {betConfirming ? "Waiting for bet confirmation..." : "Submitting bet..."}
+              </p>
+            ) : null}
+            {betError ? <p className="mt-2 text-xs text-red-300">{betError}</p> : null}
+          </section>
+
+          <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
+            <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Claim</h3>
+            <p className="mt-2 text-xs text-white/70">
+              Claim after epoch finalization. Off-chain mirror marks claimed after tx.
+            </p>
+            <p className="mt-2 text-xs text-white/80">
+              Claimable epochs: {match.claimableEpochIds.length > 0 ? match.claimableEpochIds.join(", ") : "none"}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => void submitClaim()}
+              disabled={!canClaim}
+              className="mt-3 rounded-xl border border-emerald-300/35 bg-emerald-300/10 px-3 py-2 text-xs font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {canClaim ? `Claim Epoch #${claimableEpochId}` : "No claim available"}
+            </button>
+
+            {claimTxHash ? <p className="mt-2 text-xs text-white/80">Claim tx: {claimTxHash}</p> : null}
+            {claimBusy || claimConfirming ? (
+              <p className="mt-2 text-xs text-white/70">
+                {claimConfirming ? "Waiting for claim confirmation..." : "Submitting claim..."}
+              </p>
+            ) : null}
+            {claimError ? <p className="mt-2 text-xs text-red-300">{claimError}</p> : null}
+          </section>
+
+          <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
+            <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Epoch History</h3>
+            {match.epochHistory.length === 0 ? (
+              <p className="mt-2 text-xs text-white/70">No finalized epochs yet.</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {match.epochHistory.map((entry) => (
+                  <li key={entry.epochId} className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-xs text-white/85">
+                    <p>
+                      Epoch #{entry.epochId} winner {entry.winner} | votes {entry.votesA}:{entry.votesB}
+                    </p>
+                    <p>
+                      Pool {formatMon(sumWei(entry.totalBetAWei, entry.totalBetBWei))} MON (A{" "}
+                      {formatMon(entry.totalBetAWei)} / B {formatMon(entry.totalBetBWei)})
+                    </p>
+                    <p>
+                      Agent A BR {entry.agentPerformance.A.bankroll.toFixed(2)} / Agent B BR {entry.agentPerformance.B.bankroll.toFixed(2)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           {uiMessage ? <p className="text-xs text-white/80">{uiMessage}</p> : null}

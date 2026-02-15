@@ -32,3 +32,7 @@ export function voteSideToContractSide(side: VoteSide): number {
   // Enum-style mapping: 0 = A, 1 = B.
   return side === "A" ? 0 : 1;
 }
+
+export function contractSideToVoteSide(side: bigint | number): VoteSide {
+  return Number(side) === 0 ? "A" : "B";
+}

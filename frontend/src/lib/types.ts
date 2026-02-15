@@ -61,6 +61,10 @@ export interface AgentState {
   confidence: number;
   intensity: number;
   mutationSensitivity: number;
+  bankroll: number;
+  riskLevel: number;
+  winCount: number;
+  lossCount: number;
   clipsPlayed: number;
   wins: number;
   losses: number;
@@ -88,6 +92,7 @@ export interface NowPlayingClip {
 export interface ClipHistoryItem {
   clipId: string;
   clipIndex: number;
+  epochId: number;
   agentId: AgentId;
   seed: string;
   startedAt: number;
@@ -105,6 +110,51 @@ export interface ClipHistoryItem {
   note: string;
 }
 
+export interface CurrentEpochSnapshot {
+  epochId: number;
+  startedAt: number;
+  endsAt: number;
+  isOpen: boolean;
+  isFinalized: boolean;
+  winner: VoteWinner | null;
+  votesA: number;
+  votesB: number;
+  totalBetAWei: string;
+  totalBetBWei: string;
+}
+
+export interface EpochHistoryEntry {
+  epochId: number;
+  winner: VoteWinner;
+  votesA: number;
+  votesB: number;
+  totalBetAWei: string;
+  totalBetBWei: string;
+  timestamp: number;
+  agentPerformance: {
+    A: {
+      bankroll: number;
+      wins: number;
+      losses: number;
+      riskLevel: number;
+    };
+    B: {
+      bankroll: number;
+      wins: number;
+      losses: number;
+      riskLevel: number;
+    };
+  };
+}
+
+export interface ViewerBetSnapshot {
+  epochId: number;
+  amountAWei: string;
+  amountBWei: string;
+  totalWei: string;
+  hasBet: boolean;
+}
+
 export interface MatchSnapshot {
   lobbyId: LobbyId;
   lobby: LobbyConfig;
@@ -119,6 +169,10 @@ export interface MatchSnapshot {
   nowPlaying: NowPlayingClip | null;
   currentVoteTally: ClipVoteTally | null;
   clipHistory: ClipHistoryItem[];
+  currentEpoch: CurrentEpochSnapshot;
+  epochHistory: EpochHistoryEntry[];
+  viewerBet: ViewerBetSnapshot | null;
+  claimableEpochIds: number[];
   agents: AgentState[];
   lastUpdatedAt: number;
 }
@@ -137,4 +191,21 @@ export interface VoteResult {
   bVotes: number;
   winner: VoteWinner;
   userVote: VoteSide;
+}
+
+export interface BetPayload {
+  lobbyId: LobbyId;
+  side: VoteSide;
+  amountWei: string;
+  epochId: number;
+  address: string;
+}
+
+export interface BetResult {
+  lobbyId: LobbyId;
+  epochId: number;
+  totalBetAWei: string;
+  totalBetBWei: string;
+  userAmountAWei: string;
+  userAmountBWei: string;
 }

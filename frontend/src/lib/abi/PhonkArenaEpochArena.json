@@ -11,6 +11,26 @@
   },
   {
     "type": "function",
+    "name": "placeBet",
+    "stateMutability": "payable",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "side", "type": "uint8" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "claim",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "epochId", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
     "name": "getTally",
     "stateMutability": "view",
     "inputs": [
@@ -44,6 +64,29 @@
       { "name": "epochId", "type": "uint256", "indexed": true },
       { "name": "voter", "type": "address", "indexed": true },
       { "name": "side", "type": "uint8", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "BetPlaced",
+    "anonymous": false,
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32", "indexed": true },
+      { "name": "epochId", "type": "uint256", "indexed": true },
+      { "name": "bettor", "type": "address", "indexed": true },
+      { "name": "side", "type": "uint8", "indexed": false },
+      { "name": "amount", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "Claimed",
+    "anonymous": false,
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32", "indexed": true },
+      { "name": "epochId", "type": "uint256", "indexed": true },
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false }
     ]
   }
 ]
