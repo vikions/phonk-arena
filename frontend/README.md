@@ -11,6 +11,7 @@ pnpm install
 Copy `.env.example` to `.env.local` and fill:
 
 - `NEXT_PUBLIC_MONAD_RPC`
+- `NEXT_PUBLIC_EPOCH_ARENA_ADDRESS`
 - `NEXT_PUBLIC_MATCH_ID`
 - `ADMIN_SECRET`
 
@@ -24,7 +25,7 @@ Routes:
 
 - `/` landing
 - `/lobbies` three live lobby cards with independent LIVE/IDLE + listeners
-- `/lobby/[id]` continuous live battle + off-chain clip voting
+- `/lobby/[id]` continuous live battle + on-chain epoch voting
 
 API:
 

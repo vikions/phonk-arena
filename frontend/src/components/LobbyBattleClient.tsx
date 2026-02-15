@@ -1,11 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useChainId, useSwitchChain } from "wagmi";
+import {
+  useAccount,
+  useChainId,
+  useReadContract,
+  useSwitchChain,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 
 import { renderPhonkClip } from "@/lib/audio/phonkSynth";
+import {
+  epochArenaAbi,
+  epochArenaAddress,
+  getCurrentEpochId,
+  getEpochEndTimestampSec,
+  lobbyIdToBytes32,
+  voteSideToContractSide,
+  voteSideToFallbackContractSide,
+} from "@/lib/contract";
 import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
-import type { LobbyId, MatchSnapshot, VoteResult, VoteSide } from "@/lib/types";
+import type { LobbyId, MatchSnapshot, VoteSide } from "@/lib/types";
 
 interface LobbyBattleClientProps {
   lobbyId: LobbyId;
@@ -43,10 +59,36 @@ function phaseTitle(phase: MatchSnapshot["phase"]): string {
   }
 }
 
+function parseTally(data: unknown): { aVotes: number; bVotes: number } | null {
+  if (!data) {
+    return null;
+  }
+
+  if (Array.isArray(data) && data.length >= 2) {
+    return {
+      aVotes: Number(data[0]),
+      bVotes: Number(data[1]),
+    };
+  }
+
+  if (typeof data === "object" && data !== null) {
+    const maybe = data as { aVotes?: bigint | number; bVotes?: bigint | number };
+    if (typeof maybe.aVotes !== "undefined" && typeof maybe.bVotes !== "undefined") {
+      return {
+        aVotes: Number(maybe.aVotes),
+        bVotes: Number(maybe.bVotes),
+      };
+    }
+  }
+
+  return null;
+}
+
 export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
 
   const [match, setMatch] = useState<MatchSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +97,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
-  const [userVotes, setUserVotes] = useState<Record<string, VoteSide>>({});
+  const [voteTxHash, setVoteTxHash] = useState<`0x${string}` | undefined>(undefined);
   const [now, setNow] = useState(() => Date.now());
 
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -63,6 +105,42 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const sessionIdRef = useRef<string>(makeSessionId());
 
   const wrongChain = isConnected && chainId !== MONAD_MAINNET_CHAIN_ID;
+  const lobbyIdBytes32 = useMemo(() => lobbyIdToBytes32(lobbyId), [lobbyId]);
+  const currentEpochId = useMemo(() => getCurrentEpochId(now), [now]);
+  const epochEnd = useMemo(() => getEpochEndTimestampSec(now), [now]);
+  const epochSecondsLeft = Math.max(0, epochEnd - Math.floor(now / 1000));
+  const epochEnded = epochSecondsLeft <= 0;
+
+  const { data: onchainTallyRaw, refetch: refetchOnchainTally } = useReadContract({
+    address: epochArenaAddress,
+    abi: epochArenaAbi,
+    functionName: "getTally",
+    args: [lobbyIdBytes32, currentEpochId],
+    query: {
+      refetchInterval: 5_000,
+    },
+  });
+
+  const { data: hasVotedRaw, refetch: refetchHasVoted } = useReadContract({
+    address: epochArenaAddress,
+    abi: epochArenaAbi,
+    functionName: "hasVoted",
+    args: address ? [lobbyIdBytes32, currentEpochId, address] : undefined,
+    query: {
+      enabled: Boolean(address),
+      refetchInterval: 5_000,
+    },
+  });
+
+  const { isLoading: voteConfirming } = useWaitForTransactionReceipt({
+    hash: voteTxHash,
+    query: {
+      enabled: Boolean(voteTxHash),
+    },
+  });
+
+  const onchainTally = useMemo(() => parseTally(onchainTallyRaw), [onchainTallyRaw]);
+  const hasVotedOnchain = Boolean(hasVotedRaw);
 
   const joinPresence = useCallback(async () => {
     const response = await fetch("/api/presence/join", {
@@ -279,14 +357,14 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   }, [match?.nowPlaying, now]);
 
   const currentClipId = match?.nowPlaying?.clipId ?? null;
-  const currentUserVote = currentClipId ? userVotes[currentClipId] ?? null : null;
   const canVote =
-    Boolean(audioEnabled) &&
     Boolean(match?.nowPlaying) &&
     Boolean(address) &&
     !wrongChain &&
+    !epochEnded &&
+    !hasVotedOnchain &&
     !voteBusy &&
-    currentUserVote === null;
+    !voteConfirming;
 
   const submitVote = useCallback(
     async (side: VoteSide) => {
@@ -298,7 +376,38 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       setVoteError(null);
 
       try {
-        const response = await fetch("/api/vote", {
+        const candidates = [
+          voteSideToContractSide(side),
+          voteSideToFallbackContractSide(side),
+        ].filter((value, index, list) => list.indexOf(value) === index);
+
+        let hash: `0x${string}` | null = null;
+        let lastError: Error | null = null;
+
+        for (const candidate of candidates) {
+          try {
+            hash = await writeContractAsync({
+              address: epochArenaAddress,
+              abi: epochArenaAbi,
+              functionName: "vote",
+              args: [lobbyIdBytes32, candidate],
+              chainId: MONAD_MAINNET_CHAIN_ID,
+            });
+            break;
+          } catch (errorCandidate) {
+            lastError =
+              errorCandidate instanceof Error ? errorCandidate : new Error("On-chain vote failed.");
+          }
+        }
+
+        if (!hash) {
+          throw lastError ?? new Error("On-chain vote failed.");
+        }
+
+        setVoteTxHash(hash);
+
+        // Keep local engine mutation path active while chain voting is primary source of truth.
+        await fetch("/api/vote", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -309,28 +418,26 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
             side,
             address,
           }),
-        });
+        }).catch(() => undefined);
 
-        const payload = (await response.json()) as VoteResult | { error?: string };
-
-        if (!response.ok) {
-          throw new Error("error" in payload && payload.error ? payload.error : "Vote failed.");
-        }
-
-        const vote = payload as VoteResult;
-        setUserVotes((prev) => ({
-          ...prev,
-          [vote.clipId]: vote.userVote,
-        }));
-
-        await fetchMatch();
+        await Promise.all([fetchMatch(), refetchOnchainTally(), refetchHasVoted()]);
       } catch (submitError) {
         setVoteError(submitError instanceof Error ? submitError.message : "Vote failed.");
       } finally {
         setVoteBusy(false);
       }
     },
-    [address, canVote, fetchMatch, lobbyId, match?.nowPlaying],
+    [
+      address,
+      canVote,
+      fetchMatch,
+      lobbyId,
+      lobbyIdBytes32,
+      match?.nowPlaying,
+      refetchHasVoted,
+      refetchOnchainTally,
+      writeContractAsync,
+    ],
   );
 
   if (loading && !match) {
@@ -507,7 +614,10 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
             <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Vote This Clip</h3>
             <p className="mt-2 text-xs text-white/70">
-              One vote per wallet per clip. Votes directly affect mutation for the next clips.
+              Vote goes on-chain to Monad. Tally is read from contract every 5 seconds.
+            </p>
+            <p className="mt-1 text-xs text-white/70">
+              Epoch #{currentEpochId.toString()} ends in {epochSecondsLeft}s
             </p>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -530,14 +640,25 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
             </div>
 
             <div className="mt-3 text-xs text-white/80">
+              <p>Live tally: A {onchainTally?.aVotes ?? 0} - B {onchainTally?.bVotes ?? 0}</p>
               <p>
-                Live tally: A {match.currentVoteTally?.aVotes ?? 0} - B {match.currentVoteTally?.bVotes ?? 0}
+                Winner:{" "}
+                {(onchainTally?.aVotes ?? 0) === (onchainTally?.bVotes ?? 0)
+                  ? "TIE"
+                  : (onchainTally?.aVotes ?? 0) > (onchainTally?.bVotes ?? 0)
+                    ? "A"
+                    : "B"}
               </p>
-              <p>Winner: {match.currentVoteTally?.winner ?? "TIE"}</p>
-              <p>Your vote: {currentUserVote ?? "Not voted"}</p>
+              <p>Epoch status: {epochEnded ? "Ended" : "Open"}</p>
+              <p>Your vote: {hasVotedOnchain ? "Already voted this epoch" : "Not voted"}</p>
+              {voteTxHash ? <p>Tx: {voteTxHash}</p> : null}
             </div>
 
-            {voteBusy ? <p className="mt-2 text-xs text-white/70">Submitting vote...</p> : null}
+            {voteBusy || voteConfirming ? (
+              <p className="mt-2 text-xs text-white/70">
+                {voteConfirming ? "Waiting for tx confirmation..." : "Submitting vote..."}
+              </p>
+            ) : null}
             {voteError ? <p className="mt-2 text-xs text-red-300">{voteError}</p> : null}
           </section>
 

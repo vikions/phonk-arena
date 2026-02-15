@@ -1,0 +1,49 @@
+[
+  {
+    "type": "function",
+    "name": "vote",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "side", "type": "uint8" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "getTally",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "epochId", "type": "uint256" }
+    ],
+    "outputs": [
+      { "name": "aVotes", "type": "uint256" },
+      { "name": "bVotes", "type": "uint256" }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "hasVoted",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "epochId", "type": "uint256" },
+      { "name": "voter", "type": "address" }
+    ],
+    "outputs": [
+      { "name": "", "type": "bool" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "Voted",
+    "anonymous": false,
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32", "indexed": true },
+      { "name": "epochId", "type": "uint256", "indexed": true },
+      { "name": "voter", "type": "address", "indexed": true },
+      { "name": "side", "type": "uint8", "indexed": false }
+    ]
+  }
+]
