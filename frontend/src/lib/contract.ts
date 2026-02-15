@@ -17,6 +17,7 @@ export function lobbyIdToBytes32(lobbyId: string): `0x${string}` {
 
   return pad(stringToHex(lobbyId.slice(0, 31)), {
     size: 32,
+    dir: "right",
   });
 }
 
@@ -31,6 +32,11 @@ export function getEpochEndTimestampSec(nowMs = Date.now()): number {
 export function voteSideToContractSide(side: VoteSide): number {
   // Enum-style mapping: 0 = A, 1 = B.
   return side === "A" ? 0 : 1;
+}
+
+export function betSideToContractSide(side: VoteSide): number {
+  // Betting often uses winner enum: 1 = A, 2 = B (0 reserved for Tie).
+  return side === "A" ? 1 : 2;
 }
 
 export function contractSideToVoteSide(side: bigint | number): VoteSide {

@@ -14,6 +14,7 @@ import {
 
 import { renderPhonkClip } from "@/lib/audio/phonkSynth";
 import {
+  betSideToContractSide,
   epochArenaAbi,
   epochArenaAddress,
   getCurrentEpochId,
@@ -572,7 +573,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           address: epochArenaAddress,
           abi: epochArenaAbi,
           functionName: "placeBet",
-          args: [lobbyIdBytes32, voteSideToContractSide(side)],
+          args: [lobbyIdBytes32, betSideToContractSide(side)],
           value: parsedBetWei,
           chainId: MONAD_MAINNET_CHAIN_ID,
         });
