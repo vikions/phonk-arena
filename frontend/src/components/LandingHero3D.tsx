@@ -1,29 +1,86 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
-import { Center, ContactShadows, useGLTF } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import {
+  ContactShadows,
+  OrbitControls,
+  Sparkles,
+  useGLTF,
+} from "@react-three/drei";
 import { useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import * as THREE from "three";
-import type { MouseEvent } from "react";
 
 import { HowItWorksModal } from "@/components/HowItWorksModal";
 
 const SOUND_PREF_KEY = "phonk_arena_landing_sound_enabled";
 const DEFAULT_VOLUME = 0.35;
 const ENTER_TRANSITION_MS = 350;
-const MAX_TILT_RAD = THREE.MathUtils.degToRad(8);
+const TARGET_MODEL_HEIGHT = 2.45;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash);
+}
+
+function HologramRing({ openProgress }: { openProgress: number }) {
+  const outerRef = useRef<THREE.Mesh>(null);
+  const innerRef = useRef<THREE.Mesh>(null);
+
+  useFrame((_, delta) => {
+    if (outerRef.current) {
+      outerRef.current.rotation.z += delta * (0.2 + openProgress * 0.5);
+    }
+    if (innerRef.current) {
+      innerRef.current.rotation.z -= delta * (0.14 + openProgress * 0.42);
+    }
+  });
+
+  return (
+    <group position={[0, 0.1, 0]}>
+      <mesh ref={outerRef} rotation={[Math.PI / 2.8, 0, 0]}>
+        <torusGeometry args={[1.14, 0.016, 16, 180]} />
+        <meshStandardMaterial
+          color="#b24cff"
+          emissive="#7c3aed"
+          emissiveIntensity={0.28}
+          transparent
+          opacity={0.28}
+          roughness={0.3}
+          metalness={0.55}
+        />
+      </mesh>
+      <mesh ref={innerRef} rotation={[Math.PI / 2.8, 0, Math.PI / 7]}>
+        <torusGeometry args={[0.96, 0.011, 16, 150]} />
+        <meshStandardMaterial
+          color="#ff4a8e"
+          emissive="#ff0055"
+          emissiveIntensity={0.25}
+          transparent
+          opacity={0.2}
+          roughness={0.35}
+          metalness={0.48}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 function MatryoshkaModel({
-  pointer,
   openProgress,
+  onFit,
 }: {
-  pointer: { x: number; y: number };
   openProgress: number;
+  onFit: (cameraZ: number) => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF("/models/matryoshka.glb");
@@ -31,6 +88,21 @@ function MatryoshkaModel({
   const model = useMemo(() => scene.clone(true), [scene]);
 
   useEffect(() => {
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+
+    const sourceHeight = Math.max(size.y, 0.001);
+    const fitScale = TARGET_MODEL_HEIGHT / sourceHeight;
+    const scaledDepth = size.z * fitScale;
+
+    model.position.set(-center.x, -center.y, -center.z);
+    model.scale.setScalar(fitScale);
+
+    const suggestedCameraZ = clamp(1.25 + scaledDepth * 0.35, 1.28, 1.68);
+    onFit(suggestedCameraZ);
+
+    let meshIndex = 0;
     model.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) {
         return;
@@ -45,11 +117,23 @@ function MatryoshkaModel({
           return;
         }
 
-        mat.metalness = clamp(mat.metalness + 0.07, 0, 1);
-        mat.roughness = clamp(mat.roughness - 0.08, 0.08, 1);
+        mat.roughness = clamp(mat.roughness * 0.8, 0.25, 0.55);
+        mat.metalness = clamp(mat.metalness + 0.22, 0.35, 0.6);
+
+        const marker = hashString(`${obj.name}-${meshIndex}`);
+        const namedAccent = /(eye|trim|line|orn|metal|ring|face)/i.test(obj.name);
+        const accent = namedAccent || marker % 5 === 0;
+        if (accent) {
+          mat.emissive.set(marker % 2 === 0 ? "#7c3aed" : "#ff0055");
+          mat.emissiveIntensity = 0.1 + (marker % 3) * 0.03;
+        }
+
+        mat.needsUpdate = true;
       });
+
+      meshIndex += 1;
     });
-  }, [model]);
+  }, [model, onFit]);
 
   useFrame((state, delta) => {
     const group = groupRef.current;
@@ -58,54 +142,75 @@ function MatryoshkaModel({
     }
 
     const elapsed = state.clock.getElapsedTime();
-    const targetX = -pointer.y * MAX_TILT_RAD * 0.55 + openProgress * THREE.MathUtils.degToRad(3);
-    const targetY = pointer.x * MAX_TILT_RAD + openProgress * THREE.MathUtils.degToRad(12);
-    const targetScale = 1 + openProgress * 0.1;
-    const targetYPos = Math.sin(elapsed * 1.2) * 0.045 + openProgress * 0.03;
+    const targetY = Math.sin(elapsed * 1.1) * 0.06 + openProgress * 0.04;
+    const targetScale = 1 + Math.sin(elapsed * 1.65) * 0.005 + openProgress * 0.1;
+    const targetPitch = Math.sin(elapsed * 0.55) * 0.02 + openProgress * THREE.MathUtils.degToRad(3);
 
-    group.rotation.x = THREE.MathUtils.damp(group.rotation.x, targetX, 6, delta);
-    group.rotation.y = THREE.MathUtils.damp(group.rotation.y, targetY, 6, delta);
-    group.rotation.z = THREE.MathUtils.damp(group.rotation.z, Math.sin(elapsed * 0.35) * 0.015, 3.5, delta);
+    group.position.y = THREE.MathUtils.damp(group.position.y, targetY, 4.2, delta);
+    group.rotation.x = THREE.MathUtils.damp(group.rotation.x, targetPitch, 3.2, delta);
+    group.rotation.y += delta * (0.11 + openProgress * 0.4);
 
-    const scale = THREE.MathUtils.damp(group.scale.x, targetScale, 6, delta);
+    const scale = THREE.MathUtils.damp(group.scale.x, targetScale, 4.8, delta);
     group.scale.setScalar(scale);
-    group.position.y = THREE.MathUtils.damp(group.position.y, targetYPos, 4, delta);
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.14, 0]}>
-      <Center>
-        <primitive object={model} scale={1.35} />
-      </Center>
+    <group ref={groupRef} position={[0, -0.12, 0]}>
+      <primitive object={model} />
+      <HologramRing openProgress={openProgress} />
     </group>
   );
 }
 
-function Scene({
-  pointer,
-  openProgress,
-}: {
-  pointer: { x: number; y: number };
-  openProgress: number;
-}) {
+function Scene({ openProgress }: { openProgress: number }) {
+  const [cameraZ, setCameraZ] = useState(1.5);
+  const { camera } = useThree();
+
+  useEffect(() => {
+    const cam = camera as THREE.PerspectiveCamera;
+    cam.position.set(0, 0.24, cameraZ);
+    cam.lookAt(0, 0.2, 0);
+    cam.updateProjectionMatrix();
+  }, [camera, cameraZ]);
+
   return (
     <>
-      <ambientLight intensity={0.65} />
-      <directionalLight position={[2, 2, 3]} intensity={1.05} color="#ffffff" castShadow />
-      <directionalLight position={[-2, 1, -1]} intensity={0.45} color="#9b54ff" />
-      <pointLight position={[0, 0.4, -1.5]} intensity={0.45} color="#ff4d95" />
+      <ambientLight intensity={0.22} />
+      <directionalLight position={[2.3, 2.6, 2.4]} intensity={1.25} color="#ffffff" castShadow />
+      <directionalLight position={[-2.5, 1.3, -2.4]} intensity={0.6} color="#8f4bff" />
+      <pointLight position={[0, 0.7, -1.9]} intensity={0.52} color="#ff3b7c" />
 
       <Suspense fallback={null}>
-        <MatryoshkaModel pointer={pointer} openProgress={openProgress} />
+        <MatryoshkaModel openProgress={openProgress} onFit={setCameraZ} />
       </Suspense>
 
+      <Sparkles
+        count={20}
+        size={1.6}
+        speed={0.18}
+        opacity={0.16}
+        color="#d1a8ff"
+        scale={[3.8, 2.6, 2.8]}
+      />
+
+      <OrbitControls
+        enableZoom={false}
+        enablePan={false}
+        enableDamping
+        dampingFactor={0.08}
+        rotateSpeed={0.7}
+        minPolarAngle={THREE.MathUtils.degToRad(62)}
+        maxPolarAngle={THREE.MathUtils.degToRad(118)}
+        target={[0, 0.2, 0]}
+      />
+
       <ContactShadows
-        position={[0, -1.08, 0]}
-        opacity={0.35}
-        scale={3.2}
-        blur={2.5}
-        far={2.8}
-        color="#180f20"
+        position={[0, -1.35, 0]}
+        opacity={0.62}
+        scale={4.5}
+        blur={2.2}
+        far={4}
+        color="#170d22"
       />
     </>
   );
@@ -122,8 +227,6 @@ export function LandingHero3D() {
   const [awaitingInteraction, setAwaitingInteraction] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [volume, setVolume] = useState(DEFAULT_VOLUME);
-  const [parallaxEnabled, setParallaxEnabled] = useState(false);
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
 
   const stopAudio = useCallback(() => {
     const audio = audioRef.current;
@@ -184,27 +287,6 @@ export function LandingHero3D() {
       router.push("/lobbies");
     }, ENTER_TRANSITION_MS);
   }, [leaving, router]);
-
-  const handlePointerMove = useCallback(
-    (event: MouseEvent<HTMLElement>) => {
-      if (!parallaxEnabled) {
-        return;
-      }
-
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-      const y = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
-      setPointer({
-        x: clamp(x, -1, 1),
-        y: clamp(y, -1, 1),
-      });
-    },
-    [parallaxEnabled],
-  );
-
-  const handlePointerLeave = useCallback(() => {
-    setPointer({ x: 0, y: 0 });
-  }, []);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
@@ -268,24 +350,6 @@ export function LandingHero3D() {
   }, [awaitingInteraction, soundEnabled, startAudio]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const media = window.matchMedia("(pointer: fine) and (min-width: 768px)");
-    const apply = () => setParallaxEnabled(media.matches);
-    apply();
-
-    if (typeof media.addEventListener === "function") {
-      media.addEventListener("change", apply);
-      return () => media.removeEventListener("change", apply);
-    }
-
-    media.addListener(apply);
-    return () => media.removeListener(apply);
-  }, []);
-
-  useEffect(() => {
     return () => {
       if (pushTimeoutRef.current !== null) {
         window.clearTimeout(pushTimeoutRef.current);
@@ -296,15 +360,13 @@ export function LandingHero3D() {
   return (
     <>
       <div className="pointer-events-none fixed inset-0 -z-30 bg-[#060608]" />
-      <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_44%,rgba(95,47,180,0.24),transparent_46%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.22),transparent_36%),radial-gradient(circle_at_50%_80%,rgba(0,0,0,0.82),rgba(0,0,0,0.98)_68%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_44%,rgba(95,47,180,0.26),transparent_44%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.24),transparent_35%),radial-gradient(circle_at_50%_80%,rgba(0,0,0,0.82),rgba(0,0,0,0.99)_70%)]" />
       <div className="pointer-events-none fixed inset-0 -z-10 opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
 
       <section
-        className={`fixed inset-x-0 bottom-0 top-14 overflow-hidden px-4 pb-4 pt-2 transition-opacity duration-300 sm:top-16 sm:px-6 lg:px-8 ${
+        className={`fixed inset-x-0 bottom-0 top-14 overflow-hidden px-4 pb-4 pt-1 transition-opacity duration-300 sm:top-16 sm:px-6 lg:px-8 ${
           leaving ? "opacity-0" : "opacity-100"
         }`}
-        onMouseMove={handlePointerMove}
-        onMouseLeave={handlePointerLeave}
       >
         <div
           className={`pointer-events-none absolute inset-0 transition-opacity duration-150 ${
@@ -313,36 +375,44 @@ export function LandingHero3D() {
         />
 
         <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-center">
-          <div className="flex w-full max-w-4xl flex-col items-center justify-center text-center">
+          <div className="flex w-full max-w-5xl flex-col items-center justify-center text-center">
             <div
-              className={`relative w-full max-w-3xl transition-all duration-700 ${
+              className={`relative w-full transition-all duration-700 ${
                 entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
               }`}
             >
-              <div className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-[radial-gradient(circle,rgba(255,70,145,0.32),rgba(124,62,255,0.18)_58%,transparent_80%)] blur-3xl" />
-              <div className="h-[36vh] min-h-[240px] w-full sm:h-[55vh]">
+              <div className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-[radial-gradient(circle,rgba(255,70,145,0.3),rgba(124,62,255,0.2)_58%,transparent_80%)] blur-3xl" />
+              <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-fuchsia-300/30 bg-black/35 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-fuchsia-200/80 backdrop-blur-md sm:top-4">
+                Phonk Arena Artifact MA-01
+              </div>
+              <div className="h-[44vh] min-h-[250px] w-full sm:h-[60vh] lg:h-[66vh] xl:h-[70vh]">
                 <Canvas
-                  camera={{ position: [0, 0.2, 2.6], fov: 45 }}
+                  camera={{ position: [0, 0.24, 1.5], fov: 42 }}
                   dpr={[1, 1.5]}
                   gl={{ alpha: true, antialias: true }}
+                  onCreated={({ gl }) => {
+                    gl.outputColorSpace = THREE.SRGBColorSpace;
+                    gl.toneMapping = THREE.ACESFilmicToneMapping;
+                    gl.toneMappingExposure = 1.05;
+                  }}
                 >
-                  <Scene pointer={pointer} openProgress={leaving ? 1 : 0} />
+                  <Scene openProgress={leaving ? 1 : 0} />
                 </Canvas>
               </div>
             </div>
 
             <p
-              className={`mt-3 font-display text-3xl uppercase tracking-[0.2em] text-white transition-all duration-700 sm:mt-4 sm:text-5xl ${
+              className={`-mt-2 font-display text-3xl uppercase tracking-[0.2em] text-white transition-all duration-700 sm:text-5xl ${
                 entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
               }`}
             >
               PHONK ARENA
             </p>
-            <p className="mt-2 text-xs uppercase tracking-[0.17em] text-white/72 sm:text-sm">
+            <p className="mt-1 text-xs uppercase tracking-[0.17em] text-white/72 sm:text-sm">
               Autonomous Agents Battling On-Chain
             </p>
 
-            <div className="mt-4 w-full max-w-xl rounded-2xl border border-white/20 bg-white/[0.06] px-4 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:mt-5 sm:px-5">
+            <div className="mt-3 w-full max-w-xl rounded-2xl border border-white/20 bg-white/[0.06] px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:px-5">
               <div className="flex flex-col items-center gap-3">
                 <button
                   type="button"
@@ -370,8 +440,8 @@ export function LandingHero3D() {
                       min={0}
                       max={100}
                       value={Math.round(volume * 100)}
-                      onChange={(event) => {
-                        const next = clamp(Number(event.target.value) / 100, 0, 1);
+                      onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                        const next = clamp(Number(event.currentTarget.value) / 100, 0, 1);
                         setVolume(next);
                       }}
                       className="h-1 w-24 accent-cyan-300 sm:w-28"
