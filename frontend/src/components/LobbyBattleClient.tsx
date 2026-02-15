@@ -18,7 +18,6 @@ import {
   getEpochEndTimestampSec,
   lobbyIdToBytes32,
   voteSideToContractSide,
-  voteSideToFallbackContractSide,
 } from "@/lib/contract";
 import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
 import type { LobbyId, MatchSnapshot, VoteSide } from "@/lib/types";
@@ -87,7 +86,7 @@ function parseTally(data: unknown): { aVotes: number; bVotes: number } | null {
 export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { switchChain, isPending: isSwitching } = useSwitchChain();
+  const { switchChain, switchChainAsync, isPending: isSwitching } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
 
   const [match, setMatch] = useState<MatchSnapshot | null>(null);
@@ -360,7 +359,6 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const canVote =
     Boolean(match?.nowPlaying) &&
     Boolean(address) &&
-    !wrongChain &&
     !epochEnded &&
     !hasVotedOnchain &&
     !voteBusy &&
@@ -376,33 +374,26 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       setVoteError(null);
 
       try {
-        const candidates = [
-          voteSideToContractSide(side),
-          voteSideToFallbackContractSide(side),
-        ].filter((value, index, list) => list.indexOf(value) === index);
-
-        let hash: `0x${string}` | null = null;
-        let lastError: Error | null = null;
-
-        for (const candidate of candidates) {
-          try {
-            hash = await writeContractAsync({
-              address: epochArenaAddress,
-              abi: epochArenaAbi,
-              functionName: "vote",
-              args: [lobbyIdBytes32, candidate],
-              chainId: MONAD_MAINNET_CHAIN_ID,
+        if (chainId !== MONAD_MAINNET_CHAIN_ID) {
+          if (switchChainAsync) {
+            await switchChainAsync({ chainId: MONAD_MAINNET_CHAIN_ID });
+          } else if (switchChain) {
+            switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
+            await new Promise((resolve) => {
+              setTimeout(resolve, 500);
             });
-            break;
-          } catch (errorCandidate) {
-            lastError =
-              errorCandidate instanceof Error ? errorCandidate : new Error("On-chain vote failed.");
+          } else {
+            throw new Error("Cannot switch network automatically. Please switch to Monad in wallet.");
           }
         }
 
-        if (!hash) {
-          throw lastError ?? new Error("On-chain vote failed.");
-        }
+        const hash = await writeContractAsync({
+          address: epochArenaAddress,
+          abi: epochArenaAbi,
+          functionName: "vote",
+          args: [lobbyIdBytes32, voteSideToContractSide(side)],
+          chainId: MONAD_MAINNET_CHAIN_ID,
+        });
 
         setVoteTxHash(hash);
 
@@ -422,12 +413,22 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
         await Promise.all([fetchMatch(), refetchOnchainTally(), refetchHasVoted()]);
       } catch (submitError) {
-        setVoteError(submitError instanceof Error ? submitError.message : "Vote failed.");
+        const message = submitError instanceof Error ? submitError.message : "Vote failed.";
+        if (
+          message.includes("does not match the target chain") ||
+          message.includes("chain") ||
+          message.includes("network")
+        ) {
+          setVoteError("Switch to Monad mainnet in wallet and retry vote.");
+        } else {
+          setVoteError(message);
+        }
       } finally {
         setVoteBusy(false);
       }
     },
     [
+      chainId,
       address,
       canVote,
       fetchMatch,
@@ -436,6 +437,8 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       match?.nowPlaying,
       refetchHasVoted,
       refetchOnchainTally,
+      switchChain,
+      switchChainAsync,
       writeContractAsync,
     ],
   );

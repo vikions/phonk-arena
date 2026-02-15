@@ -29,11 +29,6 @@ export function getEpochEndTimestampSec(nowMs = Date.now()): number {
 }
 
 export function voteSideToContractSide(side: VoteSide): number {
-  // Primary assumption for current contract enum: 1 = A, 2 = B.
-  return side === "A" ? 1 : 2;
-}
-
-export function voteSideToFallbackContractSide(side: VoteSide): number {
-  // Fallback for enum-style contracts where 0 = A, 1 = B.
+  // Enum-style mapping: 0 = A, 1 = B.
   return side === "A" ? 0 : 1;
 }
