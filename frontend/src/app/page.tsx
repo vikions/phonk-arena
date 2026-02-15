@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { HowItWorksModal } from "@/components/HowItWorksModal";
 
 const SOUND_PREF_KEY = "phonk_arena_landing_sound_enabled";
 const DEFAULT_VOLUME = 0.35;
 const ENTER_TRANSITION_MS = 320;
+const PARALLAX_MAX_PX = 8;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -25,6 +26,8 @@ export default function HomePage() {
   const [awaitingInteraction, setAwaitingInteraction] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [volume, setVolume] = useState(DEFAULT_VOLUME);
+  const [parallaxEnabled, setParallaxEnabled] = useState(false);
+  const [parallax, setParallax] = useState({ x: 0, y: 0 });
 
   const stopAudio = useCallback(() => {
     const audio = audioRef.current;
@@ -85,6 +88,28 @@ export default function HomePage() {
       router.push("/lobbies");
     }, ENTER_TRANSITION_MS);
   }, [leaving, router]);
+
+  const handleParallaxMove = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      if (!parallaxEnabled || leaving) {
+        return;
+      }
+
+      const rect = event.currentTarget.getBoundingClientRect();
+      const normX = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
+      const normY = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
+
+      setParallax({
+        x: clamp(normX * PARALLAX_MAX_PX, -PARALLAX_MAX_PX, PARALLAX_MAX_PX),
+        y: clamp(normY * PARALLAX_MAX_PX, -PARALLAX_MAX_PX, PARALLAX_MAX_PX),
+      });
+    },
+    [leaving, parallaxEnabled],
+  );
+
+  const handleParallaxLeave = useCallback(() => {
+    setParallax({ x: 0, y: 0 });
+  }, []);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
@@ -148,6 +173,24 @@ export default function HomePage() {
   }, [awaitingInteraction, soundEnabled, startAudio]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const media = window.matchMedia("(pointer: fine) and (min-width: 768px)");
+    const apply = () => setParallaxEnabled(media.matches);
+    apply();
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
+
+    media.addListener(apply);
+    return () => media.removeListener(apply);
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (pushTimeoutRef.current !== null) {
         window.clearTimeout(pushTimeoutRef.current);
@@ -155,95 +198,110 @@ export default function HomePage() {
     };
   }, []);
 
+  const matryoshkaTransform = useMemo(() => {
+    const scale = leaving ? 1.08 : entered ? 1 : 1.02;
+    return `translate3d(${parallax.x}px, ${parallax.y}px, 0) scale(${scale})`;
+  }, [entered, leaving, parallax.x, parallax.y]);
+
   return (
-    <section
-      className={`relative isolate overflow-hidden rounded-3xl border border-white/10 bg-[#0a0a0a] px-6 py-10 text-center transition-opacity duration-300 sm:px-10 sm:py-12 ${
-        leaving ? "opacity-0" : "opacity-100"
-      }`}
-      style={{ minHeight: "calc(100dvh - 8rem)" }}
-    >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(225,48,110,0.18),transparent_40%),radial-gradient(circle_at_50%_52%,rgba(115,62,255,0.16),transparent_52%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
-      <div
-        className={`pointer-events-none absolute inset-0 transition-opacity duration-150 ${
-          leaving ? "opacity-20" : "opacity-0"
-        } bg-[linear-gradient(0deg,transparent_0%,rgba(255,255,255,0.18)_50%,transparent_100%)]`}
-      />
+    <>
+      <div className="pointer-events-none fixed inset-0 -z-30 bg-[#060608]" />
+      <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_45%,rgba(96,43,181,0.22),transparent_48%),radial-gradient(circle_at_50%_32%,rgba(188,48,98,0.2),transparent_38%),radial-gradient(circle_at_50%_80%,rgba(0,0,0,0.82),rgba(0,0,0,0.98)_70%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-10 opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
 
-      <div className="relative mx-auto flex h-full max-w-3xl flex-col items-center justify-center">
+      <section
+        className={`fixed inset-x-0 bottom-0 top-14 overflow-hidden px-4 pb-4 pt-2 transition-opacity duration-300 sm:top-16 sm:px-6 lg:px-8 ${
+          leaving ? "opacity-0" : "opacity-100"
+        }`}
+        onMouseMove={handleParallaxMove}
+        onMouseLeave={handleParallaxLeave}
+      >
         <div
-          className={`relative transition-all duration-700 ${
-            entered ? "translate-y-0 opacity-100 scale-100" : "translate-y-3 opacity-0 scale-[1.02]"
-          } ${leaving ? "scale-[1.08]" : ""}`}
-        >
-          <div className="pointer-events-none absolute inset-3 -z-10 rounded-full bg-[radial-gradient(circle,rgba(255,68,131,0.32),rgba(109,59,255,0.08)_60%,transparent_75%)] blur-2xl" />
-          <Image
-            src="/landing/matryoshka.png"
-            alt="Matryoshka centerpiece"
-            width={460}
-            height={460}
-            priority
-            className="mx-auto h-auto w-[220px] select-none sm:w-[320px] lg:w-[380px]"
-          />
-        </div>
+          className={`pointer-events-none absolute inset-0 transition-opacity duration-150 ${
+            leaving ? "opacity-20" : "opacity-0"
+          } bg-[linear-gradient(0deg,transparent_0%,rgba(255,255,255,0.18)_50%,transparent_100%)]`}
+        />
 
-        <p
-          className={`mt-7 font-display text-4xl uppercase tracking-[0.22em] text-white transition-all duration-700 sm:text-6xl ${
-            entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-          }`}
-        >
-          PHONK ARENA
-        </p>
-        <p className="mt-3 text-sm uppercase tracking-[0.17em] text-white/70 sm:text-base">
-          Autonomous Agents Battling On-Chain
-        </p>
-
-        <div className="mt-8 flex flex-col items-center gap-3">
-          <button
-            type="button"
-            onClick={handleEnterArena}
-            disabled={leaving}
-            className="rounded-xl border border-cyan-300/70 bg-cyan-300/20 px-7 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-300/35 disabled:opacity-70"
-          >
-            ENTER THE ARENA
-          </button>
-          <HowItWorksModal />
-        </div>
-
-        <div className="mt-6 w-full max-w-md rounded-xl border border-white/15 bg-black/35 px-4 py-3">
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={handleToggleSound}
-              className="rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-white/90 transition hover:border-cyan-300/70"
+        <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-center">
+          <div className="flex w-full max-w-3xl flex-col items-center justify-center text-center">
+            <div
+              className="relative transition-[transform,opacity] duration-700 will-change-transform"
+              style={{
+                transform: matryoshkaTransform,
+                opacity: entered ? 1 : 0,
+              }}
             >
-              {soundEnabled ? "Disable Sound" : "Enable Sound"}
-            </button>
-            <label className="flex items-center gap-2 text-xs text-white/70">
-              Volume
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={Math.round(volume * 100)}
-                onChange={(event) => {
-                  const next = clamp(Number(event.target.value) / 100, 0, 1);
-                  setVolume(next);
-                }}
-                className="h-1 w-28 accent-cyan-300"
+              <div className="pointer-events-none absolute inset-4 -z-10 rounded-full bg-[radial-gradient(circle,rgba(255,66,138,0.34),rgba(118,66,255,0.2)_58%,transparent_78%)] blur-3xl" />
+              <Image
+                src="/landing/matryoshka.png"
+                alt="Matryoshka centerpiece"
+                width={540}
+                height={540}
+                priority
+                className="h-auto max-h-[38vh] w-auto select-none object-contain drop-shadow-[0_18px_40px_rgba(0,0,0,0.65)] sm:max-h-[52vh]"
               />
-            </label>
-          </div>
+            </div>
 
-          <p className="mt-2 text-xs text-white/65">
-            {audioPlaying
-              ? "Landing phonk is playing."
-              : awaitingInteraction
-                ? "Tap once anywhere to unlock audio."
-                : "Sound is currently off."}
-          </p>
+            <p
+              className={`mt-4 font-display text-3xl uppercase tracking-[0.2em] text-white transition-all duration-700 sm:mt-6 sm:text-5xl ${
+                entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+              }`}
+            >
+              PHONK ARENA
+            </p>
+            <p className="mt-2 text-xs uppercase tracking-[0.17em] text-white/72 sm:text-sm">
+              Autonomous Agents Battling On-Chain
+            </p>
+
+            <div className="mt-4 w-full max-w-xl rounded-2xl border border-white/20 bg-white/[0.06] px-4 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:mt-5 sm:px-5">
+              <div className="flex flex-col items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleEnterArena}
+                  disabled={leaving}
+                  className="w-full max-w-xs rounded-xl border border-cyan-300/70 bg-cyan-300/20 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-300/35 disabled:opacity-70 sm:text-sm"
+                >
+                  ENTER THE ARENA
+                </button>
+                <HowItWorksModal />
+
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleToggleSound}
+                    className="rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-white/90 transition hover:border-cyan-300/70"
+                  >
+                    {soundEnabled ? "Disable Sound" : "Enable Sound"}
+                  </button>
+
+                  <label className="flex items-center gap-2 text-xs text-white/70">
+                    Volume
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={Math.round(volume * 100)}
+                      onChange={(event) => {
+                        const next = clamp(Number(event.target.value) / 100, 0, 1);
+                        setVolume(next);
+                      }}
+                      className="h-1 w-24 accent-cyan-300 sm:w-28"
+                    />
+                  </label>
+                </div>
+
+                <p className="text-[11px] text-white/65 sm:text-xs">
+                  {audioPlaying
+                    ? "Landing phonk is playing."
+                    : awaitingInteraction
+                      ? "Tap once anywhere to unlock audio."
+                      : "Sound is currently off."}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
