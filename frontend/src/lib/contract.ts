@@ -30,8 +30,8 @@ export function getEpochEndTimestampSec(nowMs = Date.now()): number {
 }
 
 export function voteSideToContractSide(side: VoteSide): number {
-  // Enum-style mapping: 0 = A, 1 = B.
-  return side === "A" ? 0 : 1;
+  // Contract enum mapping: 1 = A, 2 = B (0 = Tie).
+  return side === "A" ? 1 : 2;
 }
 
 export function betSideToContractSide(side: VoteSide): number {
@@ -40,5 +40,5 @@ export function betSideToContractSide(side: VoteSide): number {
 }
 
 export function contractSideToVoteSide(side: bigint | number): VoteSide {
-  return Number(side) === 0 ? "A" : "B";
+  return Number(side) === 1 ? "A" : "B";
 }

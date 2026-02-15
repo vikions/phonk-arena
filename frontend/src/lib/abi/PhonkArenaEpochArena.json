@@ -1,6 +1,23 @@
 [
   {
     "type": "function",
+    "name": "currentEpochId",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "openEpoch",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "epochId", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
     "name": "vote",
     "stateMutability": "nonpayable",
     "inputs": [
@@ -31,6 +48,16 @@
   },
   {
     "type": "function",
+    "name": "finalizeEpoch",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "epochId", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
     "name": "getTally",
     "stateMutability": "view",
     "inputs": [
@@ -38,8 +65,11 @@
       { "name": "epochId", "type": "uint256" }
     ],
     "outputs": [
-      { "name": "aVotes", "type": "uint256" },
-      { "name": "bVotes", "type": "uint256" }
+      { "name": "aVotes", "type": "uint32" },
+      { "name": "bVotes", "type": "uint32" },
+      { "name": "finalized", "type": "bool" },
+      { "name": "winner", "type": "uint8" },
+      { "name": "endTime", "type": "uint64" }
     ]
   },
   {
@@ -53,6 +83,50 @@
     ],
     "outputs": [
       { "name": "", "type": "bool" }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "betA",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "epochId", "type": "uint256" },
+      { "name": "bettor", "type": "address" }
+    ],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "betB",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "epochId", "type": "uint256" },
+      { "name": "bettor", "type": "address" }
+    ],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "claimed",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32" },
+      { "name": "epochId", "type": "uint256" },
+      { "name": "bettor", "type": "address" }
+    ],
+    "outputs": [{ "name": "", "type": "bool" }]
+  },
+  {
+    "type": "event",
+    "name": "EpochOpened",
+    "anonymous": false,
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32", "indexed": true },
+      { "name": "epochId", "type": "uint256", "indexed": true },
+      { "name": "startTime", "type": "uint64", "indexed": false },
+      { "name": "endTime", "type": "uint64", "indexed": false }
     ]
   },
   {
@@ -80,12 +154,24 @@
   },
   {
     "type": "event",
+    "name": "EpochFinalized",
+    "anonymous": false,
+    "inputs": [
+      { "name": "lobbyId", "type": "bytes32", "indexed": true },
+      { "name": "epochId", "type": "uint256", "indexed": true },
+      { "name": "winner", "type": "uint8", "indexed": false },
+      { "name": "votesA", "type": "uint32", "indexed": false },
+      { "name": "votesB", "type": "uint32", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
     "name": "Claimed",
     "anonymous": false,
     "inputs": [
       { "name": "lobbyId", "type": "bytes32", "indexed": true },
       { "name": "epochId", "type": "uint256", "indexed": true },
-      { "name": "user", "type": "address", "indexed": true },
+      { "name": "bettor", "type": "address", "indexed": true },
       { "name": "amount", "type": "uint256", "indexed": false }
     ]
   }

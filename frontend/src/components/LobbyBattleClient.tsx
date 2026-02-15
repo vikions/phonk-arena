@@ -5,6 +5,7 @@ import { formatEther, parseEther } from "viem";
 import {
   useAccount,
   useChainId,
+  usePublicClient,
   useReadContract,
   useSwitchChain,
   useWalletClient,
@@ -35,6 +36,14 @@ interface PresenceJoinResponse {
   snapshot: MatchSnapshot;
 }
 
+interface OnchainEpochTally {
+  aVotes: number;
+  bVotes: number;
+  finalized: boolean;
+  winner: number;
+  endTime: number;
+}
+
 function makeSessionId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID().replace(/-/g, "");
@@ -62,29 +71,63 @@ function phaseTitle(phase: MatchSnapshot["phase"], status: MatchSnapshot["status
   }
 }
 
-function parseTally(data: unknown): { aVotes: number; bVotes: number } | null {
+function parseEpochTally(data: unknown): OnchainEpochTally | null {
   if (!data) {
     return null;
   }
 
-  if (Array.isArray(data) && data.length >= 2) {
+  if (Array.isArray(data) && data.length >= 5) {
     return {
       aVotes: Number(data[0]),
       bVotes: Number(data[1]),
+      finalized: Boolean(data[2]),
+      winner: Number(data[3]),
+      endTime: Number(data[4]),
     };
   }
 
   if (typeof data === "object" && data !== null) {
-    const maybe = data as { aVotes?: bigint | number; bVotes?: bigint | number };
-    if (typeof maybe.aVotes !== "undefined" && typeof maybe.bVotes !== "undefined") {
+    const maybe = data as {
+      aVotes?: bigint | number;
+      bVotes?: bigint | number;
+      finalized?: boolean;
+      winner?: bigint | number;
+      endTime?: bigint | number;
+    };
+
+    if (
+      typeof maybe.aVotes !== "undefined" &&
+      typeof maybe.bVotes !== "undefined" &&
+      typeof maybe.finalized !== "undefined" &&
+      typeof maybe.winner !== "undefined"
+    ) {
       return {
         aVotes: Number(maybe.aVotes),
         bVotes: Number(maybe.bVotes),
+        finalized: Boolean(maybe.finalized),
+        winner: Number(maybe.winner),
+        endTime: Number(maybe.endTime ?? 0),
       };
     }
   }
 
   return null;
+}
+
+function toBigInt(value: unknown): bigint {
+  if (typeof value === "bigint") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return BigInt(Math.max(0, Math.trunc(value)));
+  }
+
+  if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+    return BigInt(value);
+  }
+
+  return 0n;
 }
 
 function formatMon(wei: string, maxFraction = 4): string {
@@ -117,9 +160,14 @@ function formatCountdown(totalSeconds: number): string {
   ).padStart(2, "0")}`;
 }
 
+function nextAgentIdFromClipIndex(clipIndex: number): "A" | "B" {
+  return clipIndex % 2 === 0 ? "A" : "B";
+}
+
 export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const publicClient = usePublicClient({ chainId: MONAD_MAINNET_CHAIN_ID });
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
@@ -150,11 +198,20 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const resolvedChainId = walletChainId ?? chainId;
   const wrongChain = isConnected && resolvedChainId !== MONAD_MAINNET_CHAIN_ID;
   const lobbyIdBytes32 = useMemo(() => lobbyIdToBytes32(lobbyId), [lobbyId]);
-  const currentEpochId = useMemo(() => getCurrentEpochId(now), [now]);
-  const epochEnd = useMemo(() => getEpochEndTimestampSec(now), [now]);
-  const epochSecondsLeft = Math.max(0, epochEnd - Math.floor(now / 1000));
-  const epochEnded = epochSecondsLeft <= 0;
-  const epochCountdown = useMemo(() => formatCountdown(epochSecondsLeft), [epochSecondsLeft]);
+  const fallbackEpochId = useMemo(() => getCurrentEpochId(now), [now]);
+  const fallbackEpochEnd = useMemo(() => getEpochEndTimestampSec(now), [now]);
+  const { data: onchainCurrentEpochIdRaw, refetch: refetchOnchainCurrentEpochId } = useReadContract({
+    address: epochArenaAddress,
+    abi: epochArenaAbi,
+    functionName: "currentEpochId",
+    query: {
+      refetchInterval: 5_000,
+    },
+  });
+  const currentEpochId =
+    typeof onchainCurrentEpochIdRaw === "bigint" ? onchainCurrentEpochIdRaw : fallbackEpochId;
+  const previousEpochId = currentEpochId > 0n ? currentEpochId - 1n : null;
+  const previousEpochIdNumber = previousEpochId !== null ? Number(previousEpochId) : null;
 
   const { data: onchainTallyRaw, refetch: refetchOnchainTally } = useReadContract({
     address: epochArenaAddress,
@@ -173,6 +230,50 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     args: address ? [lobbyIdBytes32, currentEpochId, address] : undefined,
     query: {
       enabled: Boolean(address),
+      refetchInterval: 5_000,
+    },
+  });
+
+  const { data: previousEpochTallyRaw, refetch: refetchPreviousEpochTally } = useReadContract({
+    address: epochArenaAddress,
+    abi: epochArenaAbi,
+    functionName: "getTally",
+    args: previousEpochId !== null ? [lobbyIdBytes32, previousEpochId] : undefined,
+    query: {
+      enabled: previousEpochId !== null,
+      refetchInterval: 5_000,
+    },
+  });
+
+  const { data: previousEpochBetARaw, refetch: refetchPreviousEpochBetA } = useReadContract({
+    address: epochArenaAddress,
+    abi: epochArenaAbi,
+    functionName: "betA",
+    args: address && previousEpochId !== null ? [lobbyIdBytes32, previousEpochId, address] : undefined,
+    query: {
+      enabled: Boolean(address) && previousEpochId !== null,
+      refetchInterval: 5_000,
+    },
+  });
+
+  const { data: previousEpochBetBRaw, refetch: refetchPreviousEpochBetB } = useReadContract({
+    address: epochArenaAddress,
+    abi: epochArenaAbi,
+    functionName: "betB",
+    args: address && previousEpochId !== null ? [lobbyIdBytes32, previousEpochId, address] : undefined,
+    query: {
+      enabled: Boolean(address) && previousEpochId !== null,
+      refetchInterval: 5_000,
+    },
+  });
+
+  const { data: previousEpochClaimedRaw, refetch: refetchPreviousEpochClaimed } = useReadContract({
+    address: epochArenaAddress,
+    abi: epochArenaAbi,
+    functionName: "claimed",
+    args: address && previousEpochId !== null ? [lobbyIdBytes32, previousEpochId, address] : undefined,
+    query: {
+      enabled: Boolean(address) && previousEpochId !== null,
       refetchInterval: 5_000,
     },
   });
@@ -203,8 +304,30 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     },
   });
 
-  const onchainTally = useMemo(() => parseTally(onchainTallyRaw), [onchainTallyRaw]);
+  const onchainCurrentEpochTally = useMemo(() => parseEpochTally(onchainTallyRaw), [onchainTallyRaw]);
+  const onchainTally = useMemo(
+    () =>
+      onchainCurrentEpochTally
+        ? {
+            aVotes: onchainCurrentEpochTally.aVotes,
+            bVotes: onchainCurrentEpochTally.bVotes,
+          }
+        : null,
+    [onchainCurrentEpochTally],
+  );
+  const previousEpochTally = useMemo(() => parseEpochTally(previousEpochTallyRaw), [previousEpochTallyRaw]);
   const hasVotedOnchain = Boolean(hasVotedRaw);
+  const previousEpochBetAWei = useMemo(() => toBigInt(previousEpochBetARaw), [previousEpochBetARaw]);
+  const previousEpochBetBWei = useMemo(() => toBigInt(previousEpochBetBRaw), [previousEpochBetBRaw]);
+  const previousEpochClaimed = Boolean(previousEpochClaimedRaw);
+  const nowSeconds = Math.floor(now / 1000);
+  const epochEnd =
+    onchainCurrentEpochTally && onchainCurrentEpochTally.endTime > 0
+      ? onchainCurrentEpochTally.endTime
+      : fallbackEpochEnd;
+  const epochSecondsLeft = Math.max(0, epochEnd - nowSeconds);
+  const epochEnded = epochSecondsLeft <= 0;
+  const epochCountdown = useMemo(() => formatCountdown(epochSecondsLeft), [epochSecondsLeft]);
 
   const joinPresence = useCallback(async () => {
     const response = await fetch("/api/presence/join", {
@@ -455,7 +578,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     return Math.max(0, Math.ceil((match.nowPlaying.endsAt - now) / 1000));
   }, [match?.nowPlaying, now]);
 
-  const currentEpochIdNumber = match?.currentEpoch.epochId ?? Number(currentEpochId);
+  const currentEpochIdNumber = Number(currentEpochId);
   let parsedBetWei: bigint | null = null;
   try {
     parsedBetWei = parseEther(betAmount.trim() || "0");
@@ -477,12 +600,42 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     !betBusy &&
     !betConfirming &&
     hasValidBetAmount;
-  const claimableEpochId = match?.claimableEpochIds?.[0];
+  const claimableEpochId = previousEpochIdNumber;
+  const previousWinnerSide = useMemo(() => {
+    if (!previousEpochTally) {
+      return null;
+    }
+
+    if (previousEpochTally.finalized) {
+      return previousEpochTally.winner;
+    }
+
+    if (previousEpochTally.aVotes > previousEpochTally.bVotes) {
+      return 1;
+    }
+    if (previousEpochTally.bVotes > previousEpochTally.aVotes) {
+      return 2;
+    }
+    return 0;
+  }, [previousEpochTally]);
+
+  const previousHasAnyBet = previousEpochBetAWei + previousEpochBetBWei > 0n;
+  const previousHasWinningBet =
+    previousWinnerSide === 0
+      ? previousHasAnyBet
+      : previousWinnerSide === 1
+        ? previousEpochBetAWei > 0n
+        : previousWinnerSide === 2
+          ? previousEpochBetBWei > 0n
+          : false;
   const canClaim =
-    typeof claimableEpochId === "number" &&
+    claimableEpochId !== null &&
     Boolean(address) &&
     !claimBusy &&
-    !claimConfirming;
+    !claimConfirming &&
+    !previousEpochClaimed &&
+    previousHasAnyBet &&
+    previousHasWinningBet;
 
   const ensureWalletOnMonad = useCallback(async () => {
     const detectedBefore = await readWalletChainId(walletClient);
@@ -632,7 +785,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   );
 
   const submitClaim = useCallback(async () => {
-    if (!address || !canClaim || typeof claimableEpochId !== "number") {
+    if (!address || !canClaim || claimableEpochId === null) {
       return;
     }
 
@@ -641,12 +794,37 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
     try {
       await ensureWalletOnMonad();
+      const targetEpochId = BigInt(claimableEpochId);
+
+      // Contract requires explicit finalization before claim.
+      if (!previousEpochTally?.finalized) {
+        try {
+          const finalizeHash = await writeContractAsync({
+            address: epochArenaAddress,
+            abi: epochArenaAbi,
+            functionName: "finalizeEpoch",
+            args: [lobbyIdBytes32, targetEpochId],
+            chainId: MONAD_MAINNET_CHAIN_ID,
+          });
+
+          if (publicClient) {
+            await publicClient.waitForTransactionReceipt({ hash: finalizeHash });
+          }
+        } catch (finalizeError) {
+          const message = finalizeError instanceof Error ? finalizeError.message : "Epoch finalize failed.";
+          const lower = message.toLowerCase();
+
+          if (!lower.includes("already finalized")) {
+            throw finalizeError;
+          }
+        }
+      }
 
       const hash = await writeContractAsync({
         address: epochArenaAddress,
         abi: epochArenaAbi,
         functionName: "claim",
-        args: [lobbyIdBytes32, BigInt(claimableEpochId)],
+        args: [lobbyIdBytes32, targetEpochId],
         chainId: MONAD_MAINNET_CHAIN_ID,
       });
 
@@ -662,9 +840,10 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     canClaim,
     claimableEpochId,
     ensureWalletOnMonad,
-    fetchMatch,
     lobbyId,
     lobbyIdBytes32,
+    previousEpochTally?.finalized,
+    publicClient,
     writeContractAsync,
   ]);
 
@@ -688,7 +867,14 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         }),
       }).catch(() => undefined);
 
-      await fetchMatch();
+      await Promise.all([
+        fetchMatch(),
+        refetchOnchainCurrentEpochId(),
+        refetchPreviousEpochTally(),
+        refetchPreviousEpochBetA(),
+        refetchPreviousEpochBetB(),
+        refetchPreviousEpochClaimed(),
+      ]);
 
       if (!cancelled) {
         setPendingClaimEpochId(null);
@@ -700,7 +886,19 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [address, claimConfirmed, claimTxHash, fetchMatch, lobbyId, pendingClaimEpochId]);
+  }, [
+    address,
+    claimConfirmed,
+    claimTxHash,
+    fetchMatch,
+    lobbyId,
+    pendingClaimEpochId,
+    refetchOnchainCurrentEpochId,
+    refetchPreviousEpochBetA,
+    refetchPreviousEpochBetB,
+    refetchPreviousEpochClaimed,
+    refetchPreviousEpochTally,
+  ]);
 
   useEffect(() => {
     if (!claimFailed) {
@@ -720,6 +918,55 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   if (error || !match) {
     return <p className="text-red-300">{error ?? "Unable to load lobby."}</p>;
   }
+
+  const displayAgentId = match.nowPlaying
+    ? match.nowPlaying.agentId
+    : match.status === "LIVE"
+      ? nextAgentIdFromClipIndex(match.currentClipIndex)
+      : null;
+
+  const displayClip = (() => {
+    if (!match) {
+      return null;
+    }
+
+    if (match.nowPlaying) {
+      return {
+        clip: match.nowPlaying,
+        isTransition: false,
+      };
+    }
+
+    if (match.status !== "LIVE") {
+      return null;
+    }
+
+    const nextAgentId = nextAgentIdFromClipIndex(match.currentClipIndex);
+    const nextAgent = match.agents.find((agent) => agent.id === nextAgentId);
+    const recentByAgent = match.clipHistory.find((item) => item.agentId === nextAgentId);
+
+    return {
+      clip: {
+        clipId: recentByAgent?.clipId ?? `${match.matchId}-${match.currentClipIndex}`,
+        clipIndex: match.currentClipIndex,
+        agentId: nextAgentId,
+        seed: recentByAgent?.seed ?? "",
+        startedAt: recentByAgent?.startedAt ?? Date.now(),
+        endsAt: recentByAgent?.endedAt ?? Date.now(),
+        durationMs: match.clipDurationMs,
+        style: nextAgent?.currentStyle ?? recentByAgent?.style ?? "HARD",
+        strategy: nextAgent?.strategy ?? recentByAgent?.strategy ?? "ADAPTIVE",
+        confidence: nextAgent?.confidence ?? recentByAgent?.confidence ?? 0.5,
+        intensity: nextAgent?.intensity ?? recentByAgent?.intensity ?? 0.5,
+        bpm: recentByAgent?.bpm ?? 120,
+        patternDensity: recentByAgent?.patternDensity ?? 0.5,
+        distortion: recentByAgent?.distortion ?? 0.4,
+        mutationLevel: recentByAgent?.mutationLevel ?? 0.5,
+        fxChance: recentByAgent?.fxChance ?? 0.3,
+      },
+      isTransition: true,
+    };
+  })();
 
   return (
     <div className="space-y-5">
@@ -799,7 +1046,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             {match.agents.map((agent) => {
-              const isActive = match.nowPlaying?.agentId === agent.id;
+              const isActive = displayAgentId === agent.id;
 
               return (
                 <article
@@ -887,17 +1134,20 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         <div className="space-y-4">
           <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
             <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Now Playing</h3>
-            {match.nowPlaying ? (
+            {displayClip ? (
               <div className="mt-2 space-y-1 text-sm text-white/85">
-                <p>Clip: {match.nowPlaying.clipId}</p>
-                <p>Agent: {match.nowPlaying.agentId}</p>
-                <p>Style: {match.nowPlaying.style}</p>
-                <p>Strategy: {match.nowPlaying.strategy}</p>
-                <p>Intensity: {(match.nowPlaying.intensity * 100).toFixed(0)}%</p>
-                <p>Confidence: {(match.nowPlaying.confidence * 100).toFixed(0)}%</p>
-                <p>BPM: {match.nowPlaying.bpm.toFixed(1)}</p>
-                <p>Density: {(match.nowPlaying.patternDensity * 100).toFixed(0)}%</p>
-                <p>Distortion: {(match.nowPlaying.distortion * 100).toFixed(0)}%</p>
+                <p>Clip: {displayClip.clip.clipId}</p>
+                <p>
+                  Agent: {displayClip.clip.agentId}
+                  {displayClip.isTransition ? " (next)" : ""}
+                </p>
+                <p>Style: {displayClip.clip.style}</p>
+                <p>Strategy: {displayClip.clip.strategy}</p>
+                <p>Intensity: {(displayClip.clip.intensity * 100).toFixed(0)}%</p>
+                <p>Confidence: {(displayClip.clip.confidence * 100).toFixed(0)}%</p>
+                <p>BPM: {displayClip.clip.bpm.toFixed(1)}</p>
+                <p>Density: {(displayClip.clip.patternDensity * 100).toFixed(0)}%</p>
+                <p>Distortion: {(displayClip.clip.distortion * 100).toFixed(0)}%</p>
               </div>
             ) : (
               <p className="mt-2 text-sm text-white/70">
@@ -1024,7 +1274,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
               Claim after on-chain epoch finalization. Off-chain mirror marks claimed after tx.
             </p>
             <p className="mt-2 text-xs text-white/80">
-              Claimable epochs: {match.claimableEpochIds.length > 0 ? match.claimableEpochIds.join(", ") : "none"}
+              On-chain claim epoch: {claimableEpochId !== null ? claimableEpochId : "none"}
             </p>
 
             <button
