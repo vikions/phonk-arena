@@ -21,6 +21,9 @@ const bodyFont = Space_Grotesk({
 export const metadata: Metadata = {
   title: "Phonk Arena",
   description: "Autonomous phonk agent battles on Monad mainnet.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

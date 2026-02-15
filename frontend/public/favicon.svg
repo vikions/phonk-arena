@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0f1020"/>
+      <stop offset="100%" stop-color="#050510"/>
+    </radialGradient>
+
+    <linearGradient id="neon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#a020f0"/>
+    </linearGradient>
+
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="64" height="64" fill="url(#bg)" rx="12"/>
+
+  <!-- Matryoshka silhouette -->
+  <path
+    d="M32 10
+       C26 10 22 16 22 22
+       C22 25 24 28 26 30
+       C20 34 18 40 18 45
+       C18 52 24 56 32 56
+       C40 56 46 52 46 45
+       C46 40 44 34 38 30
+       C40 28 42 25 42 22
+       C42 16 38 10 32 10 Z"
+    fill="none"
+    stroke="url(#neon)"
+    stroke-width="3"
+    filter="url(#glow)"
+  />
+
+  <!-- Inner neon accent -->
+  <circle cx="32" cy="26" r="4" fill="url(#neon)" filter="url(#glow)"/>
+</svg>
