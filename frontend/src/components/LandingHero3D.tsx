@@ -7,9 +7,8 @@ import {
   Sparkles,
   useGLTF,
 } from "@react-three/drei";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
 import * as THREE from "three";
 
 import { HowItWorksModal } from "@/components/HowItWorksModal";
@@ -72,6 +71,31 @@ function HologramRing({ openProgress }: { openProgress: number }) {
         />
       </mesh>
     </group>
+  );
+}
+
+function SoundIcon({ enabled }: { enabled: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+      {enabled ? (
+        <>
+          <path d="M16 9.5a4.5 4.5 0 0 1 0 5" />
+          <path d="M18.8 7a8 8 0 0 1 0 10" />
+        </>
+      ) : (
+        <path d="M17 9L21 15" />
+      )}
+    </svg>
   );
 }
 
@@ -142,7 +166,7 @@ function MatryoshkaModel({
     }
 
     const elapsed = state.clock.getElapsedTime();
-    const targetY = Math.sin(elapsed * 1.1) * 0.06 + openProgress * 0.04;
+    const targetY = -0.4 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
     const targetScale = 1 + Math.sin(elapsed * 1.65) * 0.005 + openProgress * 0.1;
     const targetPitch = Math.sin(elapsed * 0.55) * 0.02 + openProgress * THREE.MathUtils.degToRad(3);
 
@@ -155,7 +179,7 @@ function MatryoshkaModel({
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.12, 0]}>
+    <group ref={groupRef} position={[0, -0.4, 0]}>
       <primitive object={model} />
       <HologramRing openProgress={openProgress} />
     </group>
@@ -168,8 +192,8 @@ function Scene({ openProgress }: { openProgress: number }) {
 
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
-    cam.position.set(0, 0.24, cameraZ);
-    cam.lookAt(0, 0.2, 0);
+    cam.position.set(0, 0.08, cameraZ);
+    cam.lookAt(0, -0.2, 0);
     cam.updateProjectionMatrix();
   }, [camera, cameraZ]);
 
@@ -201,13 +225,13 @@ function Scene({ openProgress }: { openProgress: number }) {
         rotateSpeed={0.7}
         minPolarAngle={THREE.MathUtils.degToRad(62)}
         maxPolarAngle={THREE.MathUtils.degToRad(118)}
-        target={[0, 0.2, 0]}
+        target={[0, -0.2, 0]}
       />
 
       <ContactShadows
-        position={[0, -1.35, 0]}
+        position={[0, -1.55, 0]}
         opacity={0.62}
-        scale={4.5}
+        scale={5}
         blur={2.2}
         far={4}
         color="#170d22"
@@ -218,6 +242,7 @@ function Scene({ openProgress }: { openProgress: number }) {
 
 export function LandingHero3D() {
   const router = useRouter();
+  const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pushTimeoutRef = useRef<number | null>(null);
 
@@ -226,7 +251,6 @@ export function LandingHero3D() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [awaitingInteraction, setAwaitingInteraction] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const [volume, setVolume] = useState(DEFAULT_VOLUME);
 
   const stopAudio = useCallback(() => {
     const audio = audioRef.current;
@@ -235,7 +259,6 @@ export function LandingHero3D() {
     }
 
     audio.pause();
-    audio.currentTime = 0;
     setAudioPlaying(false);
     setAwaitingInteraction(false);
   }, []);
@@ -245,6 +268,8 @@ export function LandingHero3D() {
     if (!audio) {
       return;
     }
+
+    audio.volume = DEFAULT_VOLUME;
 
     try {
       await audio.play();
@@ -284,9 +309,10 @@ export function LandingHero3D() {
 
     setLeaving(true);
     pushTimeoutRef.current = window.setTimeout(() => {
+      stopAudio();
       router.push("/lobbies");
     }, ENTER_TRANSITION_MS);
-  }, [leaving, router]);
+  }, [leaving, router, stopAudio]);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
@@ -310,14 +336,6 @@ export function LandingHero3D() {
       audioRef.current = null;
     };
   }, [stopAudio]);
-
-  useEffect(() => {
-    if (!audioRef.current) {
-      return;
-    }
-
-    audioRef.current.volume = clamp(volume, 0, 1);
-  }, [volume]);
 
   useEffect(() => {
     const enabled = window.localStorage.getItem(SOUND_PREF_KEY) === "1";
@@ -357,111 +375,86 @@ export function LandingHero3D() {
     };
   }, []);
 
-  return (
-    <>
-      <div className="pointer-events-none fixed inset-0 -z-30 bg-[#060608]" />
-      <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_50%_44%,rgba(95,47,180,0.26),transparent_44%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.24),transparent_35%),radial-gradient(circle_at_50%_80%,rgba(0,0,0,0.82),rgba(0,0,0,0.99)_70%)]" />
-      <div className="pointer-events-none fixed inset-0 -z-10 opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
+  useEffect(() => {
+    if (pathname !== "/") {
+      stopAudio();
+    }
+  }, [pathname, stopAudio]);
 
-      <section
-        className={`fixed inset-x-0 bottom-0 top-14 overflow-hidden px-4 pb-4 pt-1 transition-opacity duration-300 sm:top-16 sm:px-6 lg:px-8 ${
+  return (
+    <section className="relative min-h-[100dvh] overflow-hidden">
+      <Canvas
+        className="fixed inset-0 z-0"
+        style={{ width: "100vw", height: "100vh", background: "transparent" }}
+        camera={{ position: [0, 0.08, 1.5], fov: 42 }}
+        dpr={[1, 1.5]}
+        gl={{ alpha: true, antialias: true }}
+        onCreated={({ gl }) => {
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.05;
+        }}
+      >
+        <Scene openProgress={leaving ? 1 : 0} />
+      </Canvas>
+
+      <div className="pointer-events-none fixed inset-0 z-[1] bg-[#060608]" />
+      <div className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(circle_at_50%_42%,rgba(95,47,180,0.26),transparent_43%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.24),transparent_34%),radial-gradient(circle_at_50%_82%,rgba(0,0,0,0.84),rgba(0,0,0,0.99)_72%)]" />
+      <div className="pointer-events-none fixed inset-0 z-[2] opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
+
+      <div
+        className={`pointer-events-none fixed inset-0 z-10 flex items-center justify-center px-4 pb-20 pt-24 transition-opacity duration-300 sm:px-6 ${
           leaving ? "opacity-0" : "opacity-100"
         }`}
       >
         <div
-          className={`pointer-events-none absolute inset-0 transition-opacity duration-150 ${
-            leaving ? "opacity-20" : "opacity-0"
-          } bg-[linear-gradient(0deg,transparent_0%,rgba(255,255,255,0.2)_50%,transparent_100%)]`}
-        />
-
-        <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-center">
-          <div className="flex w-full max-w-5xl flex-col items-center justify-center text-center">
-            <div
-              className={`relative w-full transition-all duration-700 ${
-                entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-              }`}
-            >
-              <div className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-[radial-gradient(circle,rgba(255,70,145,0.3),rgba(124,62,255,0.2)_58%,transparent_80%)] blur-3xl" />
-              <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-fuchsia-300/30 bg-black/35 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-fuchsia-200/80 backdrop-blur-md sm:top-4">
-                Phonk Arena Artifact MA-01
-              </div>
-              <div className="h-[44vh] min-h-[250px] w-full sm:h-[60vh] lg:h-[66vh] xl:h-[70vh]">
-                <Canvas
-                  camera={{ position: [0, 0.24, 1.5], fov: 42 }}
-                  dpr={[1, 1.5]}
-                  gl={{ alpha: true, antialias: true }}
-                  onCreated={({ gl }) => {
-                    gl.outputColorSpace = THREE.SRGBColorSpace;
-                    gl.toneMapping = THREE.ACESFilmicToneMapping;
-                    gl.toneMappingExposure = 1.05;
-                  }}
-                >
-                  <Scene openProgress={leaving ? 1 : 0} />
-                </Canvas>
-              </div>
-            </div>
-
-            <p
-              className={`-mt-2 font-display text-3xl uppercase tracking-[0.2em] text-white transition-all duration-700 sm:text-5xl ${
-                entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-              }`}
-            >
-              PHONK ARENA
-            </p>
-            <p className="mt-1 text-xs uppercase tracking-[0.17em] text-white/72 sm:text-sm">
-              Autonomous Agents Battling On-Chain
-            </p>
-
-            <div className="mt-3 w-full max-w-xl rounded-2xl border border-white/20 bg-white/[0.06] px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:px-5">
-              <div className="flex flex-col items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleEnterArena}
-                  disabled={leaving}
-                  className="w-full max-w-xs rounded-xl border border-cyan-300/70 bg-cyan-300/20 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-300/35 disabled:opacity-70 sm:text-sm"
-                >
-                  ENTER THE ARENA
-                </button>
-                <HowItWorksModal />
-
-                <div className="mt-1 flex flex-wrap items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleToggleSound}
-                    className="rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-white/90 transition hover:border-cyan-300/70"
-                  >
-                    {soundEnabled ? "Disable Sound" : "Enable Sound"}
-                  </button>
-
-                  <label className="flex items-center gap-2 text-xs text-white/70">
-                    Volume
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={Math.round(volume * 100)}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                        const next = clamp(Number(event.currentTarget.value) / 100, 0, 1);
-                        setVolume(next);
-                      }}
-                      className="h-1 w-24 accent-cyan-300 sm:w-28"
-                    />
-                  </label>
-                </div>
-
-                <p className="text-[11px] text-white/65 sm:text-xs">
-                  {audioPlaying
-                    ? "Landing phonk is playing."
-                    : awaitingInteraction
-                      ? "Tap once anywhere to unlock audio."
-                      : "Sound is currently off."}
-                </p>
-              </div>
-            </div>
+          className={`w-full max-w-3xl text-center transition-all duration-700 ${
+            entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+          }`}
+        >
+          <div className="pointer-events-none mx-auto mb-6 w-fit rounded-full border border-fuchsia-300/30 bg-black/35 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-fuchsia-200/80 backdrop-blur-md">
+            Phonk Arena Artifact MA-01
           </div>
+
+          <p className="font-display text-3xl uppercase tracking-[0.2em] text-white sm:text-5xl">
+            PHONK ARENA
+          </p>
+          <p className="mt-2 text-xs uppercase tracking-[0.17em] text-white/72 sm:text-sm">
+            Autonomous Agents Battling On-Chain
+          </p>
+
+          <div className="pointer-events-auto mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={handleEnterArena}
+              disabled={leaving}
+              className="w-full max-w-xs rounded-xl border border-cyan-300/70 bg-cyan-300/20 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-300/35 disabled:opacity-70 sm:text-sm"
+            >
+              ENTER THE ARENA
+            </button>
+            <HowItWorksModal />
+          </div>
+
+          <p className="mt-3 text-[11px] text-white/65 sm:text-xs">
+            {audioPlaying
+              ? "Landing phonk is playing."
+              : awaitingInteraction
+                ? "Tap once anywhere to unlock audio."
+                : "Sound is currently off."}
+          </p>
         </div>
-      </section>
-    </>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleToggleSound}
+        aria-pressed={soundEnabled}
+        className="pointer-events-auto fixed bottom-4 right-4 z-20 inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/45 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/90 backdrop-blur-md transition hover:border-cyan-300/75"
+      >
+        <SoundIcon enabled={soundEnabled} />
+        <span>Sound: {soundEnabled ? "ON" : "OFF"}</span>
+      </button>
+    </section>
   );
 }
 
