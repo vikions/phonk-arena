@@ -114,14 +114,14 @@ function MatryoshkaModel({
   useEffect(() => {
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-
     const sourceHeight = Math.max(size.y, 0.001);
     const fitScale = TARGET_MODEL_HEIGHT / sourceHeight;
-    const scaledDepth = size.z * fitScale;
-
-    model.position.set(-center.x, -center.y, -center.z);
     model.scale.setScalar(fitScale);
+    box.setFromObject(model);
+    const scaledCenter = box.getCenter(new THREE.Vector3());
+    const scaledSize = box.getSize(new THREE.Vector3());
+    const scaledDepth = scaledSize.z;
+    model.position.sub(scaledCenter);
 
     const suggestedCameraZ = clamp(2.7 + scaledDepth * 0.28, 2.7, 3.3);
     onFit(suggestedCameraZ);
@@ -193,7 +193,7 @@ function Scene({ openProgress }: { openProgress: number }) {
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
     cam.position.set(0, 0.06, cameraZ);
-    cam.lookAt(0, -0.28, 0);
+    cam.lookAt(0, 0, 0);
     cam.updateProjectionMatrix();
   }, [camera, cameraZ]);
 
@@ -226,7 +226,7 @@ function Scene({ openProgress }: { openProgress: number }) {
         rotateSpeed={0.7}
         minPolarAngle={THREE.MathUtils.degToRad(86)}
         maxPolarAngle={THREE.MathUtils.degToRad(94)}
-        target={[0, -0.28, 0]}
+        target={[0, 0, 0]}
       />
 
       <ContactShadows
