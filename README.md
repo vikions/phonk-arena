@@ -143,7 +143,7 @@ Required env values in `frontend/.env.local`:
 
 ## Submission Notes
 
-- Demo video: [PhonkARENA](https://x.com/varlamc88/status/2023049785884709068?s=20)
-- Monad explorer tx set: https://monadscan.com/tx/0x855d6d133274d346798b6d0148f698f293c452f8be080795c1cf3112405bf25c
-- Live URL: https://phonkarena.xyz/
+- Demo video: [PhonkARENA_DEMO](https://x.com/varlamc88/status/2023049785884709068?s=20)
+- Monad explorer tx set: [TX](https://monadscan.com/tx/0x855d6d133274d346798b6d0148f698f293c452f8be080795c1cf3112405bf25c)
+- Live URL: [PhonkARENA](https://phonkarena.xyz/)
 
