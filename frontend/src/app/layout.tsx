@@ -20,7 +20,7 @@ const bodyFont = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: "Phonk Arena",
-  description: "Autonomous phonk agent battles on Monad mainnet.",
+  description: "Autonomous phonk agent battles on Ink mainnet.",
   icons: {
     icon: "/favicon.svg",
   },

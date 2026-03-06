@@ -23,8 +23,8 @@ import {
   lobbyIdToBytes32,
   voteSideToContractSide,
 } from "@/lib/contract";
-import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
-import { ensureMonadNetwork, readWalletChainId } from "@/lib/walletNetwork";
+import { INK_MAINNET_CHAIN_ID } from "@/lib/inkChain";
+import { ensureInkNetwork, readWalletChainId } from "@/lib/walletNetwork";
 import type { LobbyId, MatchSnapshot, VoteSide } from "@/lib/types";
 
 interface LobbyBattleClientProps {
@@ -167,7 +167,7 @@ function nextAgentIdFromClipIndex(clipIndex: number): "A" | "B" {
 export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const publicClient = usePublicClient({ chainId: MONAD_MAINNET_CHAIN_ID });
+  const publicClient = usePublicClient({ chainId: INK_MAINNET_CHAIN_ID });
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
@@ -196,7 +196,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
   const sessionIdRef = useRef<string>(makeSessionId());
 
   const resolvedChainId = walletChainId ?? chainId;
-  const wrongChain = isConnected && resolvedChainId !== MONAD_MAINNET_CHAIN_ID;
+  const wrongChain = isConnected && resolvedChainId !== INK_MAINNET_CHAIN_ID;
   const lobbyIdBytes32 = useMemo(() => lobbyIdToBytes32(lobbyId), [lobbyId]);
   const fallbackEpochId = useMemo(() => getCurrentEpochId(now), [now]);
   const fallbackEpochEnd = useMemo(() => getEpochEndTimestampSec(now), [now]);
@@ -637,24 +637,24 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     previousHasAnyBet &&
     previousHasWinningBet;
 
-  const ensureWalletOnMonad = useCallback(async () => {
+  const ensureWalletOnInk = useCallback(async () => {
     const detectedBefore = await readWalletChainId(walletClient);
-    if (detectedBefore === MONAD_MAINNET_CHAIN_ID || resolvedChainId === MONAD_MAINNET_CHAIN_ID) {
+    if (detectedBefore === INK_MAINNET_CHAIN_ID || resolvedChainId === INK_MAINNET_CHAIN_ID) {
       return;
     }
 
     try {
-      await ensureMonadNetwork(walletClient);
+      await ensureInkNetwork(walletClient);
     } catch {
       if (switchChain) {
-        switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
+        switchChain({ chainId: INK_MAINNET_CHAIN_ID });
       }
-      throw new Error("Switch to Monad mainnet in wallet and retry.");
+      throw new Error("Switch to Ink mainnet in wallet and retry.");
     }
 
     const detectedAfter = await readWalletChainId(walletClient);
-    if (detectedAfter !== MONAD_MAINNET_CHAIN_ID) {
-      throw new Error("Switch to Monad mainnet in wallet and retry.");
+    if (detectedAfter !== INK_MAINNET_CHAIN_ID) {
+      throw new Error("Switch to Ink mainnet in wallet and retry.");
     }
     setWalletChainId(detectedAfter);
   }, [resolvedChainId, switchChain, walletClient]);
@@ -669,14 +669,14 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       setVoteError(null);
 
       try {
-        await ensureWalletOnMonad();
+        await ensureWalletOnInk();
 
         const hash = await writeContractAsync({
           address: epochArenaAddress,
           abi: epochArenaAbi,
           functionName: "vote",
           args: [lobbyIdBytes32, voteSideToContractSide(side)],
-          chainId: MONAD_MAINNET_CHAIN_ID,
+          chainId: INK_MAINNET_CHAIN_ID,
         });
 
         setVoteTxHash(hash);
@@ -701,10 +701,10 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         const lower = message.toLowerCase();
         if (
           lower.includes("does not match the target chain") ||
-          lower.includes("wallet is not on monad") ||
-          lower.includes("switch to monad")
+          lower.includes("wallet is not on ink") ||
+          lower.includes("switch to ink")
         ) {
-          setVoteError("Switch to Monad mainnet in wallet and retry vote.");
+          setVoteError("Switch to Ink mainnet in wallet and retry vote.");
         } else {
           setVoteError(message);
         }
@@ -715,7 +715,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     [
       address,
       canVote,
-      ensureWalletOnMonad,
+      ensureWalletOnInk,
       fetchMatch,
       lobbyId,
       lobbyIdBytes32,
@@ -736,7 +736,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       setBetError(null);
 
       try {
-        await ensureWalletOnMonad();
+        await ensureWalletOnInk();
 
         const hash = await writeContractAsync({
           address: epochArenaAddress,
@@ -744,7 +744,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           functionName: "placeBet",
           args: [lobbyIdBytes32, betSideToContractSide(side)],
           value: parsedBetWei,
-          chainId: MONAD_MAINNET_CHAIN_ID,
+          chainId: INK_MAINNET_CHAIN_ID,
         });
 
         setBetTxHash(hash);
@@ -774,7 +774,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
       address,
       canBet,
       currentEpochIdNumber,
-      ensureWalletOnMonad,
+      ensureWalletOnInk,
       fetchMatch,
       lobbyId,
       lobbyIdBytes32,
@@ -793,7 +793,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     setClaimError(null);
 
     try {
-      await ensureWalletOnMonad();
+      await ensureWalletOnInk();
       const targetEpochId = BigInt(claimableEpochId);
 
       // Contract requires explicit finalization before claim.
@@ -804,7 +804,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
             abi: epochArenaAbi,
             functionName: "finalizeEpoch",
             args: [lobbyIdBytes32, targetEpochId],
-            chainId: MONAD_MAINNET_CHAIN_ID,
+            chainId: INK_MAINNET_CHAIN_ID,
           });
 
           if (publicClient) {
@@ -825,7 +825,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         abi: epochArenaAbi,
         functionName: "claim",
         args: [lobbyIdBytes32, targetEpochId],
-        chainId: MONAD_MAINNET_CHAIN_ID,
+        chainId: INK_MAINNET_CHAIN_ID,
       });
 
       setClaimTxHash(hash);
@@ -839,7 +839,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     address,
     canClaim,
     claimableEpochId,
-    ensureWalletOnMonad,
+    ensureWalletOnInk,
     lobbyId,
     lobbyIdBytes32,
     previousEpochTally?.finalized,
@@ -1025,19 +1025,19 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
         <div className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-sm text-amber-100">
           <p>Wallet is on the wrong network.</p>
           <p className="mt-1 text-xs text-amber-100/80">
-            Current chain: {resolvedChainId ?? "unknown"} | Required: {MONAD_MAINNET_CHAIN_ID}
+            Current chain: {resolvedChainId ?? "unknown"} | Required: {INK_MAINNET_CHAIN_ID}
           </p>
           <button
             type="button"
             onClick={() => {
-              void ensureMonadNetwork(walletClient).catch(() => {
-                switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
+              void ensureInkNetwork(walletClient).catch(() => {
+                switchChain({ chainId: INK_MAINNET_CHAIN_ID });
               });
             }}
             disabled={isSwitching}
             className="mt-2 rounded-lg border border-amber-300/50 px-3 py-1.5 text-xs font-semibold"
           >
-            {isSwitching ? "Switching..." : "Switch to Monad"}
+            {isSwitching ? "Switching..." : "Switch to Ink"}
           </button>
         </div>
       ) : null}
@@ -1161,7 +1161,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
           <section className="rounded-2xl border border-white/15 bg-arena-900/65 p-4">
             <h3 className="font-display text-lg uppercase tracking-[0.1em] text-white">Vote This Clip</h3>
             <p className="mt-2 text-xs text-white/70">
-              Vote goes on-chain to Monad. Tally is read from contract every 5 seconds.
+              Vote goes on-chain to Ink. Tally is read from contract every 5 seconds.
             </p>
             <p className="mt-1 text-xs text-white/70">
               Epoch #{currentEpochIdNumber} ends in {epochCountdown}
@@ -1215,7 +1215,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
             <div className="mt-3 grid gap-2">
               <label className="text-xs text-white/70" htmlFor="bet-amount">
-                MON amount
+                ETH amount
               </label>
               <input
                 id="bet-amount"
@@ -1249,11 +1249,11 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
 
             <div className="mt-3 text-xs text-white/80">
               <p>
-                Total Bet A: {formatMon(match.currentEpoch.totalBetAWei)} MON | Total Bet B:{" "}
-                {formatMon(match.currentEpoch.totalBetBWei)} MON
+                Total Bet A: {formatMon(match.currentEpoch.totalBetAWei)} ETH | Total Bet B:{" "}
+                {formatMon(match.currentEpoch.totalBetBWei)} ETH
               </p>
               <p>
-                Your epoch bet: {formatMon(match.viewerBet?.totalWei ?? "0")} MON (A{" "}
+                Your epoch bet: {formatMon(match.viewerBet?.totalWei ?? "0")} ETH (A{" "}
                 {formatMon(match.viewerBet?.amountAWei ?? "0")} / B{" "}
                 {formatMon(match.viewerBet?.amountBWei ?? "0")})
               </p>
@@ -1307,7 +1307,7 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
                       Epoch #{entry.epochId} winner {entry.winner} | votes {entry.votesA}:{entry.votesB}
                     </p>
                     <p>
-                      Pool {formatMon(sumWei(entry.totalBetAWei, entry.totalBetBWei))} MON (A{" "}
+                      Pool {formatMon(sumWei(entry.totalBetAWei, entry.totalBetBWei))} ETH (A{" "}
                       {formatMon(entry.totalBetAWei)} / B {formatMon(entry.totalBetBWei)})
                     </p>
                     <p>
@@ -1325,3 +1325,4 @@ export function LobbyBattleClient({ lobbyId }: LobbyBattleClientProps) {
     </div>
   );
 }
+

@@ -10,9 +10,10 @@ pnpm install
 
 Copy `.env.example` to `.env.local` and fill:
 
-- `NEXT_PUBLIC_MONAD_RPC`
+- `NEXT_PUBLIC_INK_RPC`
 - `NEXT_PUBLIC_EPOCH_ARENA_ADDRESS`
-- `NEXT_PUBLIC_MATCH_ID`
+- `NEXT_PUBLIC_CHAIN_ID`
+- `NEXT_PUBLIC_BLOCKSCOUT_API`
 - `ADMIN_SECRET`
 
 ## Run

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { EpochBattleSection } from "@/components/EpochBattleSection";
 import { LobbyBattleClient } from "@/components/LobbyBattleClient";
 import { isLobbyId } from "@/lib/lobbies";
 
@@ -14,5 +15,10 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     notFound();
   }
 
-  return <LobbyBattleClient lobbyId={params.id} />;
+  return (
+    <div className="space-y-5">
+      <EpochBattleSection />
+      <LobbyBattleClient lobbyId={params.id} />
+    </div>
+  );
 }

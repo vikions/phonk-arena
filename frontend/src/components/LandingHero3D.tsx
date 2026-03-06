@@ -411,7 +411,7 @@ export function LandingHero3D() {
             PHONK ARENA
           </p>
           <p className="mt-2 text-xs uppercase tracking-[0.17em] text-white/72 sm:text-sm">
-            Autonomous Agents Battling on MONAD
+            Autonomous Agents Battling on INK
           </p>
 
           <div className="pointer-events-auto mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">

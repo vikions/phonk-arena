@@ -1,6 +1,6 @@
 # Phonk Arena
 
-Autonomous agents battle in a live music duel with real on-chain wagering on Monad.
+Autonomous agents battle in a live music duel with real on-chain wagering on Ink.
 
 ## What This Is
 
@@ -19,11 +19,11 @@ This is intentionally not a classic board/card game. The game is strategic and s
 - Real token wagering: on-chain `placeBet` + `claim`
 - Strategic decisions: agents mutate confidence, risk, intensity, and style based on outcomes
 - Bankroll handling: per-agent bankroll and epoch bet pools are tracked
-- Verifiable results: `vote`, `finalizeEpoch`, `claim` transactions on Monad
+- Verifiable results: `vote`, `finalizeEpoch`, `claim` transactions on Ink
 
 ## Core Flow
 
-1. Connect wallet and switch to Monad mainnet.
+1. Connect wallet and switch to Ink mainnet.
 2. Enter a lobby with two competing agents.
 3. Vote and place bet during active epoch.
 4. At epoch end, contract finalization determines winner.
@@ -69,9 +69,9 @@ Lobbies:
 
 ## On-Chain Integration
 
-Frontend is wired to `PhonkArenaEpochArena` ABI:
+Frontend is wired to `PhonkArenaV2` ABI:
 
-- ABI path: `frontend/src/lib/abi/PhonkArenaEpochArena.json`
+- ABI path: `frontend/src/lib/abi/PhonkArenaV2.json`
 - client bindings: `frontend/src/lib/contract.ts`
 - default address: `NEXT_PUBLIC_EPOCH_ARENA_ADDRESS` in `frontend/.env.example`
 
@@ -102,9 +102,10 @@ pnpm dev
 
 Required env values in `frontend/.env.local`:
 
-- `NEXT_PUBLIC_MONAD_RPC`
+- `NEXT_PUBLIC_INK_RPC`
 - `NEXT_PUBLIC_EPOCH_ARENA_ADDRESS`
-- `NEXT_PUBLIC_MATCH_ID`
+- `NEXT_PUBLIC_CHAIN_ID`
+- `NEXT_PUBLIC_BLOCKSCOUT_API`
 - `ADMIN_SECRET`
 
 ## Key Routes
@@ -134,7 +135,7 @@ Required env values in `frontend/.env.local`:
 
 ## Demo Checklist (For Judges)
 
-1. Show wallet connected on Monad and lobby opened.
+1. Show wallet connected on Ink and lobby opened.
 2. Show existing votes in current epoch.
 3. Place a bet and capture tx hash.
 4. Wait epoch rollover (or time-cut in video edit).
@@ -144,6 +145,5 @@ Required env values in `frontend/.env.local`:
 ## Submission Notes
 
 - Demo video: [PhonkARENA_DEMO](https://x.com/varlamc88/status/2023049785884709068?s=20)
-- Monad explorer tx set: [TX](https://monadscan.com/tx/0x855d6d133274d346798b6d0148f698f293c452f8be080795c1cf3112405bf25c)
+- Ink explorer tx set: [TX](https://explorer.inkonchain.com/tx/0x855d6d133274d346798b6d0148f698f293c452f8be080795c1cf3112405bf25c)
 - Live URL: [PhonkARENA](https://phonkarena.xyz/)
-

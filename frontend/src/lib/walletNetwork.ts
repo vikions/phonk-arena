@@ -1,10 +1,10 @@
 import type { WalletClient } from "viem";
 
 import {
-  MONAD_MAINNET_CHAIN_ID,
-  MONAD_MAINNET_CHAIN_ID_HEX,
-  monadMainnetWalletAddParams,
-} from "@/lib/monadChain";
+  INK_MAINNET_CHAIN_ID,
+  INK_MAINNET_CHAIN_ID_HEX,
+  inkMainnetWalletAddParams,
+} from "@/lib/inkChain";
 
 const UNKNOWN_CHAIN_CODE = 4902;
 
@@ -79,7 +79,7 @@ function hasUnknownChainMessage(error: unknown): boolean {
   );
 }
 
-export async function ensureMonadNetwork(walletClient?: WalletClient | null): Promise<void> {
+export async function ensureInkNetwork(walletClient?: WalletClient | null): Promise<void> {
   const requester = getRequester(walletClient);
   if (!requester) {
     throw new Error("Wallet provider not available.");
@@ -90,14 +90,14 @@ export async function ensureMonadNetwork(walletClient?: WalletClient | null): Pr
     .then((value) => parseHexChainId(value))
     .catch(() => null);
 
-  if (currentChain === MONAD_MAINNET_CHAIN_ID) {
+  if (currentChain === INK_MAINNET_CHAIN_ID) {
     return;
   }
 
   try {
     await requester.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: MONAD_MAINNET_CHAIN_ID_HEX }],
+      params: [{ chainId: INK_MAINNET_CHAIN_ID_HEX }],
     });
   } catch (switchError) {
     const code = getErrorCode(switchError);
@@ -111,20 +111,20 @@ export async function ensureMonadNetwork(walletClient?: WalletClient | null): Pr
       method: "wallet_addEthereumChain",
       params: [
         {
-          chainId: monadMainnetWalletAddParams.chainId,
-          chainName: monadMainnetWalletAddParams.chainName,
+          chainId: inkMainnetWalletAddParams.chainId,
+          chainName: inkMainnetWalletAddParams.chainName,
           nativeCurrency: {
-            ...monadMainnetWalletAddParams.nativeCurrency,
+            ...inkMainnetWalletAddParams.nativeCurrency,
           },
-          rpcUrls: [...monadMainnetWalletAddParams.rpcUrls],
-          blockExplorerUrls: [...monadMainnetWalletAddParams.blockExplorerUrls],
+          rpcUrls: [...inkMainnetWalletAddParams.rpcUrls],
+          blockExplorerUrls: [...inkMainnetWalletAddParams.blockExplorerUrls],
         },
       ],
     });
 
     await requester.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: MONAD_MAINNET_CHAIN_ID_HEX }],
+      params: [{ chainId: INK_MAINNET_CHAIN_ID_HEX }],
     });
   }
 
@@ -133,8 +133,8 @@ export async function ensureMonadNetwork(walletClient?: WalletClient | null): Pr
     .then((value) => parseHexChainId(value))
     .catch(() => null);
 
-  if (finalChain !== MONAD_MAINNET_CHAIN_ID) {
-    throw new Error("Wallet is not on Monad mainnet.");
+  if (finalChain !== INK_MAINNET_CHAIN_ID) {
+    throw new Error("Wallet is not on Ink mainnet.");
   }
 }
 
@@ -154,6 +154,6 @@ export async function readWalletChainId(walletClient?: WalletClient | null): Pro
   }
 }
 
-export function isMonadChain(chainId: number | undefined): boolean {
-  return chainId === MONAD_MAINNET_CHAIN_ID;
+export function isInkChain(chainId: number | undefined): boolean {
+  return chainId === INK_MAINNET_CHAIN_ID;
 }

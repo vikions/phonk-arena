@@ -1,19 +1,19 @@
 import { createConfig, http } from "wagmi";
 import { injected } from "wagmi/connectors";
 
-import { monadMainnet } from "@/lib/monadChain";
+import { inkMainnet } from "@/lib/inkChain";
 
-const rpcUrl = process.env.NEXT_PUBLIC_MONAD_RPC || "https://rpc.monad.xyz";
+const rpcUrl = process.env.NEXT_PUBLIC_INK_RPC || "https://rpc-gel.inkonchain.com";
 
 export const wagmiConfig = createConfig({
-  chains: [monadMainnet],
+  chains: [inkMainnet],
   connectors: [
     injected({
       shimDisconnect: true,
     }),
   ],
   transports: {
-    [monadMainnet.id]: http(rpcUrl),
+    [inkMainnet.id]: http(rpcUrl),
   },
   ssr: true,
 });

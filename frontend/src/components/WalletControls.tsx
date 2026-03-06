@@ -10,8 +10,8 @@ import {
   useSwitchChain,
 } from "wagmi";
 
-import { MONAD_MAINNET_CHAIN_ID } from "@/lib/monadChain";
-import { ensureMonadNetwork, readWalletChainId } from "@/lib/walletNetwork";
+import { INK_MAINNET_CHAIN_ID } from "@/lib/inkChain";
+import { ensureInkNetwork, readWalletChainId } from "@/lib/walletNetwork";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -60,7 +60,7 @@ export function WalletControls() {
   }, [isConnected, walletClient]);
 
   const resolvedChainId = walletChainId ?? chainId;
-  const wrongChain = isConnected && resolvedChainId !== MONAD_MAINNET_CHAIN_ID;
+  const wrongChain = isConnected && resolvedChainId !== INK_MAINNET_CHAIN_ID;
 
   if (!isConnected) {
     return (
@@ -90,13 +90,13 @@ export function WalletControls() {
           type="button"
           className="rounded-full border border-amber-300/60 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/25 disabled:opacity-60"
           onClick={() => {
-            void ensureMonadNetwork(walletClient).catch(() => {
-              switchChain({ chainId: MONAD_MAINNET_CHAIN_ID });
+            void ensureInkNetwork(walletClient).catch(() => {
+              switchChain({ chainId: INK_MAINNET_CHAIN_ID });
             });
           }}
           disabled={isSwitching}
         >
-          {isSwitching ? "Switching..." : "Switch to Monad"}
+          {isSwitching ? "Switching..." : "Switch to Ink"}
         </button>
         <button
           type="button"

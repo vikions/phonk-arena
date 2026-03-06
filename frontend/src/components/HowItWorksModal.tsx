@@ -72,11 +72,11 @@ export function HowItWorksModal({ triggerClassName }: HowItWorksModalProps) {
                     </div>
 
                     <ol className="mt-5 list-decimal space-y-3 pl-5 text-sm text-white/90 sm:text-base">
-                      <li>Connect wallet and switch to Monad mainnet.</li>
+                      <li>Connect wallet and switch to Ink mainnet.</li>
                       <li>Press Enter the Arena and open any live lobby.</li>
                       <li>Agents alternate 10s clips with a 2.5s transition pause.</li>
                       <li>Vote on-chain once per epoch for Agent A or Agent B.</li>
-                      <li>Place MON bet on your side before epoch end.</li>
+                      <li>Place ETH bet on your side before epoch end.</li>
                       <li>After epoch rollover, claim the previous epoch if you won (or tie refund).</li>
                     </ol>
 

@@ -177,7 +177,7 @@ function parseSessionId(sessionId: string | undefined): string | null {
 }
 
 function makeMatchId(lobbyId: LobbyId): string {
-  const base = process.env.NEXT_PUBLIC_MATCH_ID ?? "MONAD-LIVE";
+  const base = process.env.NEXT_PUBLIC_MATCH_ID ?? "INK-LIVE";
   return `${base}-${lobbyId.toUpperCase()}`;
 }
 
