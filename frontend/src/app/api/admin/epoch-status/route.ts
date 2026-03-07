@@ -5,8 +5,10 @@ import {
   epochArenaAbi,
   epochArenaAddress,
   epochArenaRpcUrl,
+  getCurrentEpochId,
   getAgentDNA,
   getEpochTokenSelection,
+  isEpochArenaAddressConfigured,
 } from "@/lib/contract";
 import { inkMainnet } from "@/lib/inkChain";
 import { agentPickToken } from "@/lib/tokenDiscovery";
@@ -32,20 +34,40 @@ export async function GET(request: NextRequest) {
       transport: http(epochArenaRpcUrl),
     });
 
-    const epochIdRaw = await publicClient.readContract({
-      address: epochArenaAddress,
-      abi: epochArenaAbi,
-      functionName: "currentEpochId",
-    });
-    const epochId = Number(epochIdRaw);
+    let epochId = Number(getCurrentEpochId());
+    let contractStatus = "fallback";
+    let contractError: string | null = null;
+
+    if (isEpochArenaAddressConfigured) {
+      try {
+        const epochIdRaw = await publicClient.readContract({
+          address: epochArenaAddress,
+          abi: epochArenaAbi,
+          functionName: "currentEpochId",
+        });
+        epochId = Number(epochIdRaw);
+        contractStatus = "onchain";
+      } catch (error) {
+        contractStatus = "error";
+        contractError =
+          error instanceof Error ? error.message : "Failed to read currentEpochId from contract";
+      }
+    } else {
+      contractStatus = "missing_address";
+      contractError = "NEXT_PUBLIC_EPOCH_ARENA_ADDRESS is not configured";
+    }
 
     const agents = await Promise.all(
       ([0, 1, 2, 3] as const).map(async (agentId) => {
-        const [dna, currentSelection, wouldPickNow] = await Promise.all([
+        const [dnaResult, selectionResult, pickResult] = await Promise.allSettled([
           getAgentDNA(agentId, publicClient),
           getEpochTokenSelection(BigInt(epochId), agentId, publicClient),
           agentPickToken(agentId),
         ]);
+
+        const dna = dnaResult.status === "fulfilled" ? dnaResult.value : null;
+        const currentSelection = selectionResult.status === "fulfilled" ? selectionResult.value : null;
+        const wouldPickNow = pickResult.status === "fulfilled" ? pickResult.value : null;
 
         return {
           agentId,
@@ -60,12 +82,34 @@ export async function GET(request: NextRequest) {
                 timestamp: currentSelection.timestamp,
               }
             : null,
-          wouldPickNow: {
-            symbol: wouldPickNow.symbol,
-            address: wouldPickNow.address,
-            priceChange24h: wouldPickNow.priceChange24h,
-            volume24h: wouldPickNow.volume24h,
-            holderCount: wouldPickNow.holderCount,
+          wouldPickNow: wouldPickNow
+            ? {
+                symbol: wouldPickNow.symbol,
+                address: wouldPickNow.address,
+                priceChange24h: wouldPickNow.priceChange24h,
+                volume24h: wouldPickNow.volume24h,
+                holderCount: wouldPickNow.holderCount,
+              }
+            : null,
+          errors: {
+            dna:
+              dnaResult.status === "rejected"
+                ? dnaResult.reason instanceof Error
+                  ? dnaResult.reason.message
+                  : "Failed to load DNA"
+                : null,
+            currentSelection:
+              selectionResult.status === "rejected"
+                ? selectionResult.reason instanceof Error
+                  ? selectionResult.reason.message
+                  : "Failed to load current selection"
+                : null,
+            wouldPickNow:
+              pickResult.status === "rejected"
+                ? pickResult.reason instanceof Error
+                  ? pickResult.reason.message
+                  : "Failed to simulate token pick"
+                : null,
           },
         };
       }),
@@ -74,6 +118,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       epochId,
       timestamp: new Date().toISOString(),
+      contractStatus,
+      contractError,
       agents,
     });
   } catch (error) {
