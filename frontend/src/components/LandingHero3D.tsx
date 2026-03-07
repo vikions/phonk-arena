@@ -7,14 +7,12 @@ import {
   Sparkles,
   useGLTF,
 } from "@react-three/drei";
-import { usePathname, useRouter } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import { HowItWorksModal } from "@/components/HowItWorksModal";
 
-const SOUND_PREF_KEY = "phonk_arena_landing_sound_enabled";
-const DEFAULT_VOLUME = 0.35;
 const ENTER_TRANSITION_MS = 350;
 const TARGET_MODEL_HEIGHT = 2.2;
 
@@ -71,31 +69,6 @@ function HologramRing({ openProgress }: { openProgress: number }) {
         />
       </mesh>
     </group>
-  );
-}
-
-function SoundIcon({ enabled }: { enabled: boolean }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 9v6h4l5 4V5L8 9H4z" />
-      {enabled ? (
-        <>
-          <path d="M16 9.5a4.5 4.5 0 0 1 0 5" />
-          <path d="M18.8 7a8 8 0 0 1 0 10" />
-        </>
-      ) : (
-        <path d="M17 9L21 15" />
-      )}
-    </svg>
   );
 }
 
@@ -243,72 +216,10 @@ function Scene({ openProgress }: { openProgress: number }) {
 
 export function LandingHero3D() {
   const router = useRouter();
-  const pathname = usePathname();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const pushTimeoutRef = useRef<number | null>(null);
 
   const [entered, setEntered] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const [awaitingInteraction, setAwaitingInteraction] = useState(false);
-  const stopAudio = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
-
-    audio.pause();
-    setAwaitingInteraction(false);
-  }, []);
-
-  const startAudio = useCallback(async () => {
-    const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
-
-    audio.volume = DEFAULT_VOLUME;
-
-    try {
-      await audio.play();
-      setAwaitingInteraction(false);
-    } catch {
-      setAwaitingInteraction(true);
-    }
-  }, []);
-
-  const setSoundPreference = useCallback((enabled: boolean) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(SOUND_PREF_KEY, enabled ? "1" : "0");
-  }, []);
-
-  const handleToggleSound = useCallback(() => {
-    const next = !soundEnabled;
-    setSoundEnabled(next);
-    setSoundPreference(next);
-
-    if (next) {
-      void startAudio();
-      return;
-    }
-
-    stopAudio();
-  }, [setSoundPreference, soundEnabled, startAudio, stopAudio]);
-
-  const handleEnterArena = useCallback(() => {
-    if (leaving) {
-      return;
-    }
-
-    setLeaving(true);
-    pushTimeoutRef.current = window.setTimeout(() => {
-      stopAudio();
-      router.push("/lobbies");
-    }, ENTER_TRANSITION_MS);
-  }, [leaving, router, stopAudio]);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
@@ -321,61 +232,12 @@ export function LandingHero3D() {
   }, []);
 
   useEffect(() => {
-    const audio = new Audio("/landing/landing-phonk.mp3");
-    audio.loop = true;
-    audio.preload = "auto";
-    audio.volume = DEFAULT_VOLUME;
-    audioRef.current = audio;
-
-    return () => {
-      stopAudio();
-      audioRef.current = null;
-    };
-  }, [stopAudio]);
-
-  useEffect(() => {
-    const enabled = window.localStorage.getItem(SOUND_PREF_KEY) === "1";
-    setSoundEnabled(enabled);
-
-    if (enabled) {
-      void startAudio();
-    }
-  }, [startAudio]);
-
-  useEffect(() => {
-    if (!soundEnabled || !awaitingInteraction) {
-      return;
-    }
-
-    const unlock = () => {
-      void startAudio();
-    };
-
-    const opts: AddEventListenerOptions = { once: true, passive: true };
-    window.addEventListener("pointerdown", unlock, opts);
-    window.addEventListener("keydown", unlock, { once: true });
-    window.addEventListener("touchstart", unlock, opts);
-
-    return () => {
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
-      window.removeEventListener("touchstart", unlock);
-    };
-  }, [awaitingInteraction, soundEnabled, startAudio]);
-
-  useEffect(() => {
     return () => {
       if (pushTimeoutRef.current !== null) {
         window.clearTimeout(pushTimeoutRef.current);
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (pathname !== "/") {
-      stopAudio();
-    }
-  }, [pathname, stopAudio]);
 
   return (
     <section className="relative min-h-[100dvh] overflow-hidden">
@@ -417,7 +279,16 @@ export function LandingHero3D() {
           <div className="pointer-events-auto mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <button
               type="button"
-              onClick={handleEnterArena}
+              onClick={() => {
+                if (leaving) {
+                  return;
+                }
+
+                setLeaving(true);
+                pushTimeoutRef.current = window.setTimeout(() => {
+                  router.push("/lobbies");
+                }, ENTER_TRANSITION_MS);
+              }}
               disabled={leaving}
               className="w-full max-w-xs rounded-xl border border-cyan-300/70 bg-cyan-300/20 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-300/35 disabled:opacity-70 sm:text-sm"
             >
@@ -430,15 +301,6 @@ export function LandingHero3D() {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={handleToggleSound}
-        aria-pressed={soundEnabled}
-        className="pointer-events-auto fixed bottom-4 right-4 z-20 inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/45 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/90 backdrop-blur-md transition hover:border-cyan-300/75"
-      >
-        <SoundIcon enabled={soundEnabled} />
-        <span>Sound: {soundEnabled ? "ON" : "OFF"}</span>
-      </button>
     </section>
   );
 }

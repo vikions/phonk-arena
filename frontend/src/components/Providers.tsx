@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { WagmiProvider } from "wagmi";
 
+import { ArenaAudioProvider } from "@/components/ArenaAudioProvider";
 import { wagmiConfig } from "@/lib/wagmi";
 
 interface ProvidersProps {
@@ -25,7 +26,9 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <ArenaAudioProvider>{children}</ArenaAudioProvider>
+      </QueryClientProvider>
     </WagmiProvider>
   );
 }
