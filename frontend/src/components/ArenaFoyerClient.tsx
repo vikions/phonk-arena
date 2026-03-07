@@ -15,11 +15,10 @@ type ArenaAgentId = 0 | 1 | 2 | 3;
 interface AgentDisplay {
   agentId: ArenaAgentId;
   name: "RAGE" | "GHOST" | "ORACLE" | "GLITCH";
-  emoji: string;
   image: string;
   accent: string;
   aura: string;
-  persona: string;
+  role: string;
 }
 
 interface AgentFoyerState {
@@ -35,38 +34,34 @@ const AGENTS: AgentDisplay[] = [
   {
     agentId: 0,
     name: "RAGE",
-    emoji: "RED",
     image: "/person/RAGE.png",
     accent: "#f43f5e",
     aura: "rgba(244,63,94,0.32)",
-    persona: "Volatility hunter. Hunts the sharpest move in the chamber and weaponizes chaos.",
+    role: "Volatility Hunter",
   },
   {
     agentId: 1,
     name: "GHOST",
-    emoji: "BLUE",
     image: "/person/GHOST.png",
     accent: "#38bdf8",
     aura: "rgba(56,189,248,0.28)",
-    persona: "Crowd whisperer. Tracks holder momentum and fades into the fastest-growing cult.",
+    role: "Holder Whisperer",
   },
   {
     agentId: 2,
     name: "ORACLE",
-    emoji: "GOLD",
     image: "/person/ORACLE.png",
     accent: "#facc15",
     aura: "rgba(250,204,21,0.25)",
-    persona: "Market priest. Prefers heavy flow, deep liquidity, and conviction from the tape.",
+    role: "Flow Reader",
   },
   {
     agentId: 3,
     name: "GLITCH",
-    emoji: "GREEN",
     image: "/person/GLITCH.png",
     accent: "#22c55e",
     aura: "rgba(34,197,94,0.28)",
-    persona: "Wild card. Pulls from the hype field with a seeded daily glitch in the matrix.",
+    role: "Chaos Seeder",
   },
 ];
 
@@ -93,6 +88,22 @@ function formatPercent(value: number): string {
   return `${sign}${value.toFixed(2)}%`;
 }
 
+function getMutationStage(mutationVersion: number): string {
+  if (mutationVersion >= 5) {
+    return "Apex";
+  }
+
+  if (mutationVersion >= 3) {
+    return "Mutant";
+  }
+
+  if (mutationVersion >= 1) {
+    return "Awakened";
+  }
+
+  return "Genesis";
+}
+
 export function ArenaFoyerClient() {
   const publicClient = usePublicClient();
   const [agentState, setAgentState] = useState<Record<ArenaAgentId, AgentFoyerState>>({
@@ -101,7 +112,6 @@ export function ArenaFoyerClient() {
     2: defaultAgentState(2),
     3: defaultAgentState(3),
   });
-  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -165,7 +175,6 @@ export function ArenaFoyerClient() {
         if (!cancelled) {
           startTransition(() => {
             setAgentState(nextState);
-            setGeneratedAt(picksPayload.generatedAt);
             setError(null);
           });
         }
@@ -188,31 +197,28 @@ export function ArenaFoyerClient() {
   }, [publicClient]);
 
   return (
-    <div className="space-y-10">
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(7,8,16,0.96),rgba(10,18,34,0.9))] px-5 py-8 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:px-8 sm:py-10">
+    <div className="flex min-h-[calc(100dvh-9.5rem)] flex-col gap-5 xl:gap-4">
+      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(7,8,16,0.96),rgba(10,18,34,0.9))] px-5 py-7 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:px-8 sm:py-8">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(192,38,211,0.14),transparent_42%),radial-gradient(circle_at_85%_18%,rgba(34,211,238,0.16),transparent_30%),radial-gradient(circle_at_18%_90%,rgba(244,63,94,0.14),transparent_28%)]" />
         <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:36px_36px]" />
 
         <div className="relative">
-          <p className="text-[11px] uppercase tracking-[0.36em] text-cyan-200/70">Agent Chamber</p>
-          <div className="mt-4 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="font-display text-4xl uppercase tracking-[0.12em] text-white sm:text-5xl">
-                Four Matryoshka Minds. One Daily Loadout.
+          <p className="text-[11px] uppercase tracking-[0.36em] text-cyan-200/70">Ink Mainnet // Mutation Floor</p>
+          <div className="mt-3 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-4xl">
+              <h1 className="font-display text-3xl uppercase tracking-[0.12em] text-white sm:text-4xl xl:text-[2.8rem]">
+                Let The Loudest Token Survive.
               </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/72 sm:text-base">
-                Before the battle platform opens, the chamber reveals today&apos;s holders, DNA drift, and the tokens
-                each agent is carrying into the arena.
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/72 sm:text-base">
+                Ink tokens hit different when four evolving agents get involved. Every cycle they mutate, seize a new
+                pick, and drag it toward the floor where only one signal gets to look strong.
               </p>
             </div>
 
-            <div className="grid gap-2 text-xs uppercase tracking-[0.18em] text-white/60 sm:text-sm">
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                Daily Sync: {generatedAt ? new Date(generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Calibrating"}
-              </div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                Audio Chamber: Ambient loop active on this floor
-              </div>
+            <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-white/62">
+              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">4 Agents</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Daily Mutation</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Fresh Ink Picks</span>
             </div>
           </div>
         </div>
@@ -224,110 +230,101 @@ export function ArenaFoyerClient() {
         </section>
       ) : null}
 
-      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {AGENTS.map((agent, index) => {
           const state = agentState[agent.agentId];
+          const mutationStage = getMutationStage(state.mutationVersion);
 
           return (
             <article
               key={agent.agentId}
-              className="arena-rise group relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_16px_50px_rgba(0,0,0,0.45)]"
+              className="arena-rise group relative h-[26rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(6,8,16,0.95),rgba(5,8,14,0.98))] shadow-[0_16px_50px_rgba(0,0,0,0.45)] xl:h-[28rem]"
               style={{
                 animationDelay: `${index * 120}ms`,
                 boxShadow: `0 18px 50px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.04), 0 0 42px ${agent.aura}`,
               }}
             >
-              <div className="relative aspect-[4/5] overflow-hidden">
+              <div className="absolute inset-0 overflow-hidden">
                 <Image
                   src={agent.image}
                   alt={agent.name}
                   fill
                   priority
-                  className="object-cover transition duration-700 group-hover:scale-[1.035]"
+                  className="scale-[1.08] object-cover object-center opacity-20 blur-2xl transition duration-700 group-hover:scale-[1.12]"
+                />
+                <Image
+                  src={agent.image}
+                  alt=""
+                  fill
+                  priority
+                  aria-hidden="true"
+                  className="object-contain object-center px-2 pt-2 transition duration-700 group-hover:scale-[1.04]"
                 />
                 <div
                   className="absolute inset-0"
                   style={{
-                    background: `linear-gradient(180deg, rgba(8,10,18,0.15) 0%, rgba(8,10,18,0.38) 42%, rgba(5,7,14,0.95) 100%), radial-gradient(circle at top, ${agent.aura}, transparent 40%)`,
+                    background: `linear-gradient(180deg, rgba(8,10,18,0.08) 0%, rgba(8,10,18,0.2) 28%, rgba(5,7,14,0.46) 58%, rgba(5,7,14,0.96) 100%), radial-gradient(circle at top, ${agent.aura}, transparent 44%)`,
                   }}
                 />
-                <div className="absolute inset-x-0 top-0 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.35em] text-white/55">{agent.emoji}</p>
-                      <h2 className="mt-2 font-display text-3xl uppercase tracking-[0.12em] text-white">
-                        {agent.name}
-                      </h2>
-                    </div>
-                    <span
-                      className="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/90 backdrop-blur-md"
-                      style={{
-                        borderColor: `${agent.accent}80`,
-                        backgroundColor: `${agent.accent}25`,
-                      }}
-                    >
-                      DNA v{state.mutationVersion}
-                    </span>
-                  </div>
+              </div>
+
+              <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4">
+                <div>
+                  <h2 className="font-display text-3xl uppercase tracking-[0.12em] text-white">{agent.name}</h2>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-white/62">{agent.role}</p>
                 </div>
+                <span
+                  className="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/90 backdrop-blur-md"
+                  style={{
+                    borderColor: `${agent.accent}80`,
+                    backgroundColor: `${agent.accent}25`,
+                  }}
+                >
+                  DNA v{state.mutationVersion}
+                </span>
+              </div>
 
-                <div className="absolute inset-x-0 bottom-0 p-4">
-                  <div className="rounded-[1.5rem] border border-white/10 bg-black/45 p-4 backdrop-blur-md">
-                    <p className="text-xs uppercase tracking-[0.24em] text-white/50">Held Today</p>
-                    <div className="mt-2 flex items-end justify-between gap-3">
-                      <div>
-                        <p className="font-display text-2xl uppercase tracking-[0.08em] text-white">
-                          {state.token?.symbol ?? (loading ? "SYNC" : "WAIT")}
-                        </p>
-                        <p className="mt-1 text-xs text-white/60">{agent.persona}</p>
-                      </div>
-                      <div className="text-right font-mono text-sm text-white/80">
-                        <p>{state.wins}W / {state.losses}L</p>
-                        <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/55">{state.strategy}</p>
-                      </div>
+              <div className="absolute inset-x-0 bottom-0 z-10 p-4">
+                <div className="rounded-[1.35rem] border border-white/10 bg-black/42 p-4 backdrop-blur-md">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-[0.24em] text-white/46">Held Today</p>
+                      <p className="truncate font-display text-[1.9rem] uppercase tracking-[0.08em] text-white">
+                        {state.token?.symbol ?? (loading ? "SYNCING" : "NO PICK")}
+                      </p>
                     </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-[11px] text-white/82">
-                      <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-white/45">24h Move</p>
-                        <p className={state.token && state.token.priceChange24h > 0 ? "text-emerald-300" : "text-red-300"}>
-                          {state.token ? formatPercent(state.token.priceChange24h) : "--"}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-white/45">Liquidity</p>
-                        <p>{state.token ? `$${formatCompact(state.token.liquidityUsd)}` : "--"}</p>
-                      </div>
-                      <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-white/45">Transactions</p>
-                        <p>{state.token ? formatCompact(state.token.txCount24h, 0) : "--"}</p>
-                      </div>
-                      <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-white/45">BPM Core</p>
-                        <p>{state.dna.bpmRange}</p>
-                      </div>
+                    <div className="text-right font-mono text-[11px] uppercase tracking-[0.16em] text-white/56">
+                      <p>{state.strategy}</p>
                     </div>
+                  </div>
 
-                    <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/68">
-                      <div className="rounded-lg border border-white/8 bg-white/5 px-2 py-2 text-center">
-                        Layer {state.dna.layerDensity}
-                      </div>
-                      <div className="rounded-lg border border-white/8 bg-white/5 px-2 py-2 text-center">
-                        Glitch {state.dna.glitchIntensity}
-                      </div>
-                      <div className="rounded-lg border border-white/8 bg-white/5 px-2 py-2 text-center">
-                        Bass {state.dna.bassWeight}
-                      </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[11px] text-white/84">
+                    <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">Stage</p>
+                      <p>{mutationStage}</p>
                     </div>
+                    <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">Record</p>
+                      <p>{state.wins}W / {state.losses}L</p>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">24h Move</p>
+                      <p className={state.token && state.token.priceChange24h > 0 ? "text-emerald-300" : "text-red-300"}>
+                        {state.token ? formatPercent(state.token.priceChange24h) : "--"}
+                      </p>
+                    </div>
+                  </div>
 
+                  <div className="mt-3 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-white/58">
+                    <span className="font-mono">BPM {state.dna.bpmRange}</span>
                     {state.token?.pairUrl ? (
                       <Link
                         href={state.token.pairUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-4 inline-flex text-[11px] uppercase tracking-[0.18em] text-white/62 transition hover:text-white"
+                        className="transition hover:text-white"
                       >
-                        Open market trace
+                        Market Trace
                       </Link>
                     ) : null}
                   </div>
@@ -338,20 +335,21 @@ export function ArenaFoyerClient() {
         })}
       </section>
 
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/30 px-6 py-7 text-center shadow-[0_16px_60px_rgba(0,0,0,0.35)]">
+      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/30 px-5 py-5 shadow-[0_16px_60px_rgba(0,0,0,0.35)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.15),transparent_45%)]" />
-        <div className="relative">
-          <p className="text-[11px] uppercase tracking-[0.34em] text-cyan-200/70">Next Floor</p>
-          <h3 className="mt-3 font-display text-3xl uppercase tracking-[0.12em] text-white">
-            Battle Platform
-          </h3>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-white/68">
-            Step out of the chamber and into the live battleground. The arena module is still the current battle
-            implementation while we refine the full platform flow.
-          </p>
+        <div className="relative flex flex-col gap-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.34em] text-cyan-200/70">Next Floor</p>
+            <h3 className="mt-2 font-display text-2xl uppercase tracking-[0.12em] text-white">
+              Battle Platform
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
+              Picks are loaded. Step into the floor and let the crowd decide what actually hits.
+            </p>
+          </div>
           <Link
             href="/lobby/drift-hard"
-            className="arena-pulse mt-6 inline-flex rounded-full border border-cyan-300/60 bg-cyan-300/18 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:bg-cyan-300/28"
+            className="arena-pulse inline-flex self-center rounded-full border border-cyan-300/60 bg-cyan-300/18 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:bg-cyan-300/28 sm:self-auto"
           >
             Enter Battle Platform
           </Link>
