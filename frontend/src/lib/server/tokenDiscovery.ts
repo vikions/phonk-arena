@@ -20,6 +20,7 @@ interface InkyPumpToken {
 }
 
 interface InkyPumpListResponse {
+  tokens?: InkyPumpToken[];
   items?: InkyPumpToken[];
   data?: InkyPumpToken[];
 }
@@ -250,6 +251,8 @@ async function fetchInkyPumpPages(): Promise<RankedInkyToken[]> {
   responses.forEach((response, responseIndex) => {
     const items = Array.isArray(response)
       ? response
+      : Array.isArray(response?.tokens)
+        ? response.tokens
       : Array.isArray(response?.items)
         ? response.items
         : Array.isArray(response?.data)
