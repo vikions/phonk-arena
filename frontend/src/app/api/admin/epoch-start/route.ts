@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentEpochId } from "@/lib/contract";
-import { getDailyAgentTokenPicks } from "@/lib/tokenDiscovery";
+import { getDailyAgentTokenPicks } from "@/lib/server/tokenDiscovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,9 +28,9 @@ export async function POST(request: NextRequest) {
   const dailyPicks = await getDailyAgentTokenPicks();
   const selections = await Promise.all(
     ([0, 1, 2, 3] as const).map(async (agentId) => {
-      const token = dailyPicks[agentId];
+      const token = dailyPicks[agentId].token;
       console.log(
-        `Agent ${agentId} picked: ${token.symbol} | change: ${token.priceChange24h}% | volume: ${token.volume24h}`,
+        `Agent ${agentId} picked: ${token.symbol} | change: ${token.priceChange24h}% | volume: ${token.volume24h} | liquidity: ${token.liquidityUsd} | txns: ${token.txCount24h}`,
       );
       return {
         agentId,

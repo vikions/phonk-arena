@@ -11,7 +11,7 @@ import {
   isEpochArenaAddressConfigured,
 } from "@/lib/contract";
 import { inkMainnet } from "@/lib/inkChain";
-import { getDailyAgentTokenPicks } from "@/lib/tokenDiscovery";
+import { getDailyAgentTokenPicks } from "@/lib/server/tokenDiscovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
           currentSelection &&
           currentSelection.tokenAddress !== "0x0000000000000000000000000000000000000000" &&
           Boolean(currentSelection.tokenSymbol);
-        const wouldPickNow = dailyPicks ? dailyPicks[agentId] : null;
+        const wouldPickNow = dailyPicks ? dailyPicks[agentId].token : null;
 
         return {
           agentId,
@@ -103,6 +103,13 @@ export async function GET(request: NextRequest) {
                 priceChange24h: wouldPickNow.priceChange24h,
                 volume24h: wouldPickNow.volume24h,
                 holderCount: wouldPickNow.holderCount,
+                holderDelta24h: wouldPickNow.holderDelta24h,
+                liquidityUsd: wouldPickNow.liquidityUsd,
+                txCount24h: wouldPickNow.txCount24h,
+                hypeScore: wouldPickNow.hypeScore,
+                strategyScore: wouldPickNow.strategyScore,
+                pairUrl: wouldPickNow.pairUrl,
+                createdAt: wouldPickNow.createdAt,
               }
             : null,
           errors: {

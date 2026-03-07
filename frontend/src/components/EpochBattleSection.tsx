@@ -14,8 +14,7 @@ import {
 } from "@/lib/contract";
 import { DEFAULT_DNA } from "@/lib/musicEngine";
 import type { AgentDNA } from "@/lib/musicEngine";
-import { agentPickToken } from "@/lib/tokenDiscovery";
-import type { InkToken } from "@/lib/tokenDiscovery";
+import type { DailyAgentPicksResponse, InkToken } from "@/lib/tokenDiscovery";
 
 type ArenaAgentId = 0 | 1 | 2 | 3;
 
@@ -94,6 +93,18 @@ export function EpochBattleSection({ onBet }: EpochBattleSectionProps) {
     const nextDnas = defaultDnaMap();
     const nextRecords = defaultRecordMap();
     try {
+      const picksResponse = await fetch("/api/epoch-battle", {
+        cache: "no-store",
+      });
+      if (!picksResponse.ok) {
+        throw new Error("Failed to load daily agent picks.");
+      }
+
+      const picksPayload = (await picksResponse.json()) as DailyAgentPicksResponse;
+      const fallbackTokens = new Map(
+        (picksPayload.picks || []).map((pick) => [pick.agentId, pick.token as InkToken]),
+      );
+
       await Promise.all(
         AGENT_IDS.map(async (agentId) => {
           const [contractDNA, contractSelection] = await Promise.all([
@@ -116,7 +127,7 @@ export function EpochBattleSection({ onBet }: EpochBattleSectionProps) {
           }
 
           const selectionToken = selectionToToken(contractSelection);
-          nextTokens[agentId] = selectionToken ?? (await agentPickToken(agentId));
+          nextTokens[agentId] = selectionToken ?? fallbackTokens.get(agentId) ?? null;
         }),
       );
 
