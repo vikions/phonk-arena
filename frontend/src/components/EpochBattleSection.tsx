@@ -93,36 +93,40 @@ export function EpochBattleSection({ onBet }: EpochBattleSectionProps) {
     const nextTokens = defaultTokenMap();
     const nextDnas = defaultDnaMap();
     const nextRecords = defaultRecordMap();
+    try {
+      await Promise.all(
+        AGENT_IDS.map(async (agentId) => {
+          const [contractDNA, contractSelection] = await Promise.all([
+            getAgentDNA(agentId, publicClient),
+            getEpochTokenSelection(currentEpochId, agentId, publicClient),
+          ]);
 
-    await Promise.all(
-      AGENT_IDS.map(async (agentId) => {
-        const [contractDNA, contractSelection] = await Promise.all([
-          getAgentDNA(agentId, publicClient),
-          getEpochTokenSelection(currentEpochId, agentId, publicClient),
-        ]);
+          if (contractDNA) {
+            nextDnas[agentId] = {
+              bpmRange: contractDNA.bpmRange || DEFAULT_DNA[agentId].bpmRange,
+              layerDensity: contractDNA.layerDensity || DEFAULT_DNA[agentId].layerDensity,
+              glitchIntensity: contractDNA.glitchIntensity || DEFAULT_DNA[agentId].glitchIntensity,
+              bassWeight: contractDNA.bassWeight || DEFAULT_DNA[agentId].bassWeight,
+              mutationVersion: contractDNA.mutationVersion,
+            };
+            nextRecords[agentId] = {
+              wins: contractDNA.wins,
+              losses: contractDNA.losses,
+            };
+          }
 
-        if (contractDNA) {
-          nextDnas[agentId] = {
-            bpmRange: contractDNA.bpmRange || DEFAULT_DNA[agentId].bpmRange,
-            layerDensity: contractDNA.layerDensity || DEFAULT_DNA[agentId].layerDensity,
-            glitchIntensity: contractDNA.glitchIntensity || DEFAULT_DNA[agentId].glitchIntensity,
-            bassWeight: contractDNA.bassWeight || DEFAULT_DNA[agentId].bassWeight,
-            mutationVersion: contractDNA.mutationVersion,
-          };
-          nextRecords[agentId] = {
-            wins: contractDNA.wins,
-            losses: contractDNA.losses,
-          };
-        }
+          const selectionToken = selectionToToken(contractSelection);
+          nextTokens[agentId] = selectionToken ?? (await agentPickToken(agentId));
+        }),
+      );
 
-        const selectionToken = selectionToToken(contractSelection);
-        nextTokens[agentId] = selectionToken ?? (await agentPickToken(agentId));
-      }),
-    );
-
-    setTokens(nextTokens);
-    setDnas(nextDnas);
-    setRecords(nextRecords);
+      setTokens(nextTokens);
+      setDnas(nextDnas);
+      setRecords(nextRecords);
+      setStatus(null);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to load epoch battle data.");
+    }
   }, [currentEpochId, publicClient]);
 
   useEffect(() => {

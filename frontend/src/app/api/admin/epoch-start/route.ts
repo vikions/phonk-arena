@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentEpochId } from "@/lib/contract";
-import { agentPickToken } from "@/lib/tokenDiscovery";
+import { getDailyAgentTokenPicks } from "@/lib/tokenDiscovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +25,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const dailyPicks = await getDailyAgentTokenPicks();
   const selections = await Promise.all(
     ([0, 1, 2, 3] as const).map(async (agentId) => {
-      const token = await agentPickToken(agentId);
+      const token = dailyPicks[agentId];
       console.log(
         `Agent ${agentId} picked: ${token.symbol} | change: ${token.priceChange24h}% | volume: ${token.volume24h}`,
       );

@@ -11,7 +11,7 @@ import {
   isEpochArenaAddressConfigured,
 } from "@/lib/contract";
 import { inkMainnet } from "@/lib/inkChain";
-import { agentPickToken } from "@/lib/tokenDiscovery";
+import { getDailyAgentTokenPicks } from "@/lib/tokenDiscovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +37,10 @@ export async function GET(request: NextRequest) {
     let epochId = Number(getCurrentEpochId());
     let contractStatus = "fallback";
     let contractError: string | null = null;
+    let dailyPicks:
+      | Awaited<ReturnType<typeof getDailyAgentTokenPicks>>
+      | null = null;
+    let dailyPickError: string | null = null;
 
     if (isEpochArenaAddressConfigured) {
       try {
@@ -57,23 +61,33 @@ export async function GET(request: NextRequest) {
       contractError = "NEXT_PUBLIC_EPOCH_ARENA_ADDRESS is not configured";
     }
 
+    try {
+      dailyPicks = await getDailyAgentTokenPicks();
+    } catch (error) {
+      dailyPickError =
+        error instanceof Error ? error.message : "Failed to simulate token picks";
+    }
+
     const agents = await Promise.all(
       ([0, 1, 2, 3] as const).map(async (agentId) => {
-        const [dnaResult, selectionResult, pickResult] = await Promise.allSettled([
+        const [dnaResult, selectionResult] = await Promise.allSettled([
           getAgentDNA(agentId, publicClient),
           getEpochTokenSelection(BigInt(epochId), agentId, publicClient),
-          agentPickToken(agentId),
         ]);
 
         const dna = dnaResult.status === "fulfilled" ? dnaResult.value : null;
         const currentSelection = selectionResult.status === "fulfilled" ? selectionResult.value : null;
-        const wouldPickNow = pickResult.status === "fulfilled" ? pickResult.value : null;
+        const hasRecordedSelection =
+          currentSelection &&
+          currentSelection.tokenAddress !== "0x0000000000000000000000000000000000000000" &&
+          Boolean(currentSelection.tokenSymbol);
+        const wouldPickNow = dailyPicks ? dailyPicks[agentId] : null;
 
         return {
           agentId,
           name: AGENT_NAMES[agentId],
           dna,
-          currentSelection: currentSelection
+          currentSelection: hasRecordedSelection && currentSelection
             ? {
                 tokenAddress: currentSelection.tokenAddress,
                 tokenSymbol: currentSelection.tokenSymbol,
@@ -104,12 +118,7 @@ export async function GET(request: NextRequest) {
                   ? selectionResult.reason.message
                   : "Failed to load current selection"
                 : null,
-            wouldPickNow:
-              pickResult.status === "rejected"
-                ? pickResult.reason instanceof Error
-                  ? pickResult.reason.message
-                  : "Failed to simulate token pick"
-                : null,
+            wouldPickNow: dailyPickError,
           },
         };
       }),
