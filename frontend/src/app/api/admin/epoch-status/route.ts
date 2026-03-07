@@ -11,6 +11,7 @@ import {
   isEpochArenaAddressConfigured,
 } from "@/lib/contract";
 import { inkMainnet } from "@/lib/inkChain";
+import { getSnapshotBackend } from "@/lib/server/tokenSnapshotStore";
 import { getDailyAgentTokenPicks } from "@/lib/server/tokenDiscovery";
 
 export const runtime = "nodejs";
@@ -136,6 +137,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
       contractStatus,
       contractError,
+      snapshotBackend: getSnapshotBackend(),
       agents,
     });
   } catch (error) {
