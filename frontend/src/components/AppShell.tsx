@@ -12,6 +12,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const isFoyer = pathname === "/lobbies";
+  const isBattle = pathname?.startsWith("/lobby/");
 
   return (
     <>
@@ -22,6 +23,8 @@ export function AppShell({ children }: AppShellProps) {
             ? "h-[calc(100dvh-var(--topbar-height))] overflow-hidden"
             : isFoyer
               ? "mx-auto flex min-h-[calc(100dvh-var(--topbar-height))] w-full max-w-[92rem] flex-col px-3 py-3 sm:px-4 sm:py-4 lg:h-[calc(100dvh-var(--topbar-height))] lg:overflow-hidden lg:px-5 lg:py-4 xl:px-6"
+              : isBattle
+                ? "mx-auto w-full max-w-[92rem] px-3 pb-10 pt-4 sm:px-4 lg:px-5 xl:px-6"
               : "mx-auto w-full max-w-6xl px-4 pb-16 pt-8 sm:px-6 lg:px-8"
         }
       >

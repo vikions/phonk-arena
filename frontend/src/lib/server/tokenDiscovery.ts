@@ -353,6 +353,38 @@ async function fetchDexPairsByToken(tokens: RankedInkyToken[]): Promise<Map<stri
   return pairByAddress;
 }
 
+async function fetchDexPairsByAddress(addresses: string[]): Promise<Map<string, DexPair | null>> {
+  const pairByAddress = new Map<string, DexPair | null>();
+
+  for (const batch of chunkArray(addresses, DEFAULT_BATCH_SIZE)) {
+    const response = await fetchJson<DexPair[]>(
+      `${DEXSCREENER_API_BASE_URL}/tokens/v1/${DEXSCREENER_CHAIN_ID}/${batch.join(",")}`,
+    );
+
+    const pairs = Array.isArray(response) ? response : [];
+    const groupedPairs = new Map<string, DexPair[]>();
+
+    for (const pair of pairs) {
+      const baseAddress = normalizeAddress(pair.baseToken?.address);
+      const quoteAddress = normalizeAddress(pair.quoteToken?.address);
+
+      if (baseAddress) {
+        groupedPairs.set(baseAddress, [...(groupedPairs.get(baseAddress) || []), pair]);
+      }
+
+      if (quoteAddress && quoteAddress !== baseAddress) {
+        groupedPairs.set(quoteAddress, [...(groupedPairs.get(quoteAddress) || []), pair]);
+      }
+    }
+
+    for (const address of batch) {
+      pairByAddress.set(address, pickBestPair(address, groupedPairs.get(address) || []));
+    }
+  }
+
+  return pairByAddress;
+}
+
 function getTrendingScore(token: RankedInkyToken): number {
   if (token.trendingRank === null) {
     return 0;
@@ -652,4 +684,38 @@ export async function getDailyAgentTokenPicks(nowMs = Date.now()): Promise<Token
 export async function agentPickToken(agentId: AgentId, nowMs = Date.now()): Promise<DiscoveredInkToken> {
   const picks = await getDailyAgentTokenPicks(nowMs);
   return picks[agentId].token;
+}
+
+export async function getLiveDailyAgentTokenPicks(nowMs = Date.now()): Promise<TokenPickMap> {
+  const baselinePicks = await getDailyAgentTokenPicks(nowMs);
+  const addresses = Object.values(baselinePicks).map((pick) => pick.token.address);
+  const pairByAddress = await fetchDexPairsByAddress(addresses);
+
+  const livePicks = {} as TokenPickMap;
+
+  (Object.values(baselinePicks) as AgentTokenPick[]).forEach((pick) => {
+    const baselineToken = pick.token;
+    const pair = pairByAddress.get(baselineToken.address) || null;
+    const dexVolume24h = toNumber(pair?.volume?.h24);
+    const dexPriceChange24h = toNumber(pair?.priceChange?.h24);
+    const dexLiquidityUsd = toNumber(pair?.liquidity?.usd);
+    const dexTxCount = toNumber(pair?.txns?.h24?.buys) + toNumber(pair?.txns?.h24?.sells);
+    const marketCap = toNumber(pair?.marketCap) || toNumber(pair?.fdv) || baselineToken.circulatingMarketCap;
+
+    livePicks[pick.agentId] = {
+      ...pick,
+      token: {
+        ...baselineToken,
+        priceChange24h: dexPriceChange24h || baselineToken.priceChange24h,
+        volume24h: dexVolume24h || baselineToken.volume24h,
+        liquidityUsd: dexLiquidityUsd || baselineToken.liquidityUsd,
+        txCount24h: dexTxCount || baselineToken.txCount24h,
+        circulatingMarketCap: marketCap,
+        pairAddress: pair?.pairAddress || baselineToken.pairAddress,
+        pairUrl: pair?.url || baselineToken.pairUrl,
+      },
+    };
+  });
+
+  return livePicks;
 }
