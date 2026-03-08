@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "arena:sync": "node scripts/arena-sync.mjs"
   },
   "dependencies": {
     "@react-three/drei": "9.122.0",
