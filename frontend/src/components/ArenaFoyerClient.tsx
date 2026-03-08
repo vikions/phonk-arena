@@ -108,22 +108,6 @@ function formatPercent(value: number): string {
   return `${sign}${value.toFixed(2)}%`;
 }
 
-function getMutationStage(mutationVersion: number): string {
-  if (mutationVersion >= 5) {
-    return "Apex";
-  }
-
-  if (mutationVersion >= 3) {
-    return "Mutant";
-  }
-
-  if (mutationVersion >= 1) {
-    return "Awakened";
-  }
-
-  return "Genesis";
-}
-
 function derivePreviewStyle(agent: AgentDisplay, token: DiscoveredInkToken, dna: AgentDNA): AgentStyle {
   const priceNorm = clamp(Math.abs(token.priceChange24h) / 12, 0, 1);
   const activityNorm = clamp(Math.log10(token.volume24h + 1) / 3, 0, 1);
@@ -149,6 +133,7 @@ function derivePreviewStyle(agent: AgentDisplay, token: DiscoveredInkToken, dna:
 }
 
 function buildPreviewClipConfig(agent: AgentDisplay, token: DiscoveredInkToken, dna: AgentDNA) {
+  const previewWindow = Math.floor(Date.now() / (12 * 60 * 1000));
   const priceNorm = clamp(Math.abs(token.priceChange24h) / 14, 0, 1);
   const volumeNorm = clamp(Math.log10(token.volume24h + 1) / 3, 0, 1);
   const liquidityNorm = clamp(Math.log10(token.liquidityUsd + 1) / 5, 0, 1);
@@ -192,7 +177,7 @@ function buildPreviewClipConfig(agent: AgentDisplay, token: DiscoveredInkToken, 
   }
 
   return {
-    seed: `foyer:${agent.name}:${token.address}:${token.symbol}:${dna.mutationVersion}`,
+    seed: `foyer:${agent.name}:${token.address}:${token.symbol}:${dna.mutationVersion}:${previewWindow}`,
     style,
     strategy: agent.previewStrategy,
     lobbyId: agent.previewLobbyId,
@@ -226,6 +211,7 @@ export function ArenaFoyerClient() {
   const previewAudioContextRef = useRef<AudioContext | null>(null);
   const previewSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const previewRequestIdRef = useRef(0);
+  const previewBufferCacheRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
 
   const stopPreview = useCallback(
     (resumeAmbient = true) => {
@@ -252,6 +238,7 @@ export function ArenaFoyerClient() {
     async function loadFoyer() {
       try {
         setLoading(true);
+        void fetch("/api/sounds", { cache: "force-cache" }).catch(() => undefined);
         const picksRequest = fetch("/api/epoch-battle", {
           cache: "no-store",
         });
@@ -337,6 +324,69 @@ export function ArenaFoyerClient() {
     };
   }, [stopPreview]);
 
+  const ensurePreviewBuffer = useCallback((agent: AgentDisplay, state: AgentFoyerState) => {
+    if (!state.token) {
+      return null;
+    }
+
+    const config = buildPreviewClipConfig(agent, state.token, state.dna);
+    const cacheKey = config.seed;
+    const existing = previewBufferCacheRef.current.get(cacheKey);
+    if (existing) {
+      return existing;
+    }
+
+    const created = renderPhonkClip(config).catch((error) => {
+      previewBufferCacheRef.current.delete(cacheKey);
+      throw error;
+    });
+
+    previewBufferCacheRef.current.set(cacheKey, created);
+    return created;
+  }, []);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    let cancelled = false;
+    const timers: number[] = [];
+
+    const warm = (index: number) => {
+      if (cancelled || index >= AGENTS.length) {
+        return;
+      }
+
+      const agent = AGENTS[index];
+      const state = agentState[agent.agentId];
+
+      const run = () => {
+        if (cancelled) {
+          return;
+        }
+
+        void ensurePreviewBuffer(agent, state);
+        warm(index + 1);
+      };
+
+      if (index === 0) {
+        run();
+        return;
+      }
+
+      const timeoutId = window.setTimeout(run, 160 * index);
+      timers.push(timeoutId);
+    };
+
+    warm(0);
+
+    return () => {
+      cancelled = true;
+      timers.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
+  }, [agentState, ensurePreviewBuffer, loading]);
+
   const togglePreview = useCallback(
     async (agent: AgentDisplay) => {
       const state = agentState[agent.agentId];
@@ -365,7 +415,12 @@ export function ArenaFoyerClient() {
         await previewAudioContextRef.current.resume();
         stopPreview(false);
 
-        const buffer = await renderPhonkClip(buildPreviewClipConfig(agent, state.token, state.dna));
+        const bufferPromise = ensurePreviewBuffer(agent, state);
+        if (!bufferPromise) {
+          throw new Error("No token selected for preview.");
+        }
+
+        const buffer = await bufferPromise;
         if (previewRequestIdRef.current !== requestId || !previewAudioContextRef.current) {
           return;
         }
@@ -400,12 +455,12 @@ export function ArenaFoyerClient() {
         setPreviewError(previewLoadError instanceof Error ? previewLoadError.message : "Unable to build phonk preview.");
       }
     },
-    [agentState, playingAgentId, setPreviewSuppressed, stopPreview],
+    [agentState, ensurePreviewBuffer, playingAgentId, setPreviewSuppressed, stopPreview],
   );
 
   return (
-    <div className="flex min-h-[calc(100dvh-9.5rem)] flex-col gap-5 xl:gap-4">
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(7,8,16,0.96),rgba(10,18,34,0.9))] px-5 py-7 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:px-8 sm:py-8">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:h-full lg:overflow-hidden">
+      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(7,8,16,0.96),rgba(10,18,34,0.9))] px-5 py-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:px-7 sm:py-7">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(192,38,211,0.14),transparent_42%),radial-gradient(circle_at_85%_18%,rgba(34,211,238,0.16),transparent_30%),radial-gradient(circle_at_18%_90%,rgba(244,63,94,0.14),transparent_28%)]" />
         <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:36px_36px]" />
 
@@ -436,17 +491,16 @@ export function ArenaFoyerClient() {
         </section>
       ) : null}
 
-      <section className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-4 lg:min-h-0">
         {AGENTS.map((agent, index) => {
           const state = agentState[agent.agentId];
-          const mutationStage = getMutationStage(state.mutationVersion);
           const isPreviewLoading = pendingPreviewAgentId === agent.agentId;
           const isPreviewPlaying = playingAgentId === agent.agentId;
 
           return (
             <article
               key={agent.agentId}
-              className="arena-rise group relative h-[26rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(6,8,16,0.95),rgba(5,8,14,0.98))] shadow-[0_16px_50px_rgba(0,0,0,0.45)] xl:h-[28rem]"
+              className="arena-rise group relative h-[23.5rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(6,8,16,0.95),rgba(5,8,14,0.98))] shadow-[0_16px_50px_rgba(0,0,0,0.45)] xl:h-[24rem] 2xl:h-[24.5rem]"
               style={{
                 animationDelay: `${index * 120}ms`,
                 boxShadow: `0 18px 50px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.04), 0 0 42px ${agent.aura}`,
@@ -488,7 +542,7 @@ export function ArenaFoyerClient() {
                     backgroundColor: `${agent.accent}25`,
                   }}
                 >
-                  DNA v{state.mutationVersion}
+                  Live Signal
                 </span>
               </div>
 
@@ -509,11 +563,7 @@ export function ArenaFoyerClient() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[11px] text-white/84">
-                    <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">Stage</p>
-                      <p>{mutationStage}</p>
-                    </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-[11px] text-white/84">
                     <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
                       <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">Record</p>
                       <p>{state.wins}W / {state.losses}L</p>
@@ -563,7 +613,7 @@ export function ArenaFoyerClient() {
         })}
       </section>
 
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/30 px-5 py-5 shadow-[0_16px_60px_rgba(0,0,0,0.35)]">
+      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/30 px-5 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.35)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.15),transparent_45%)]" />
         <div className="relative flex flex-col gap-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
           <div>

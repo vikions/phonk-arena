@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Orbitron, Space_Grotesk } from "next/font/google";
 
+import { AppShell } from "@/components/AppShell";
 import { Providers } from "@/components/Providers";
-import { TopBar } from "@/components/TopBar";
 
 import "./globals.css";
 
@@ -35,8 +35,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${displayFont.variable} ${bodyFont.variable}`}>
         <Providers>
-          <TopBar />
-          <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">{children}</main>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>

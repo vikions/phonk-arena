@@ -72,7 +72,7 @@ export function AgentCard({ agentId, token, dna, wins, losses, onBet }: AgentCar
             {agent.emoji} {agent.name}
           </h3>
           <p className="mt-1 inline-flex rounded-full border border-[#6C3483] bg-[#6C3483]/20 px-2 py-1 text-xs font-mono">
-            DNA v{dna.mutationVersion}
+            {dna.mutationVersion > 0 ? `Mutation ${dna.mutationVersion}` : "Arena Ready"}
           </p>
         </div>
         <p className="text-right text-sm font-mono text-white/80">

@@ -8,13 +8,13 @@ import {
   useGLTF,
 } from "@react-three/drei";
 import { useRouter } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import { HowItWorksModal } from "@/components/HowItWorksModal";
 
 const ENTER_TRANSITION_MS = 350;
-const TARGET_MODEL_HEIGHT = 2.2;
+const TARGET_MODEL_HEIGHT = 2.9;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -72,12 +72,47 @@ function HologramRing({ openProgress }: { openProgress: number }) {
   );
 }
 
+function MatryoshkaStandIn({ openProgress }: { openProgress: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame((state, delta) => {
+    if (!groupRef.current) {
+      return;
+    }
+
+    const elapsed = state.clock.getElapsedTime();
+    const bob = Math.sin(elapsed * 1.15) * 0.06;
+    groupRef.current.position.y = THREE.MathUtils.damp(groupRef.current.position.y, -0.2 + bob, 4.2, delta);
+    groupRef.current.rotation.y += delta * (0.32 + openProgress * 0.3);
+  });
+
+  return (
+    <group ref={groupRef} position={[0, -0.2, 0]}>
+      <mesh position={[0, 0.36, 0]}>
+        <sphereGeometry args={[0.42, 40, 40]} />
+        <meshStandardMaterial color="#f9d9c8" emissive="#7c3aed" emissiveIntensity={0.08} roughness={0.34} />
+      </mesh>
+      <mesh position={[0, -0.26, 0]} scale={[1, 1.22, 1]}>
+        <sphereGeometry args={[0.76, 48, 48]} />
+        <meshStandardMaterial color="#140f24" emissive="#ff0055" emissiveIntensity={0.14} metalness={0.36} roughness={0.28} />
+      </mesh>
+      <mesh position={[0, -0.12, 0.72]} rotation={[0, 0, 0.08]}>
+        <planeGeometry args={[0.42, 0.74]} />
+        <meshStandardMaterial color="#2ff9ff" emissive="#2ff9ff" emissiveIntensity={0.55} transparent opacity={0.18} />
+      </mesh>
+      <HologramRing openProgress={openProgress} />
+    </group>
+  );
+}
+
 function MatryoshkaModel({
   openProgress,
   onFit,
+  onReady,
 }: {
   openProgress: number;
   onFit: (cameraZ: number) => void;
+  onReady: () => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF("/models/matryoshka.glb");
@@ -96,7 +131,7 @@ function MatryoshkaModel({
     const scaledDepth = scaledSize.z;
     model.position.sub(scaledCenter);
 
-    const suggestedCameraZ = clamp(2.7 + scaledDepth * 0.28, 2.7, 3.3);
+    const suggestedCameraZ = clamp(2.46 + scaledDepth * 0.22, 2.35, 3.05);
     onFit(suggestedCameraZ);
 
     let meshIndex = 0;
@@ -130,7 +165,8 @@ function MatryoshkaModel({
 
       meshIndex += 1;
     });
-  }, [model, onFit]);
+    onReady();
+  }, [model, onFit, onReady]);
 
   useFrame((state, delta) => {
     const group = groupRef.current;
@@ -139,8 +175,8 @@ function MatryoshkaModel({
     }
 
     const elapsed = state.clock.getElapsedTime();
-    const targetY = -0.36 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.03;
-    const targetScale = 1 + Math.sin(elapsed * 1.65) * 0.005 + openProgress * 0.1;
+    const targetY = -0.45 + Math.sin(elapsed * 1.1) * 0.05 + openProgress * 0.02;
+    const targetScale = 1 + Math.sin(elapsed * 1.65) * 0.006 + openProgress * 0.08;
     const targetPitch = Math.sin(elapsed * 0.55) * 0.02 + openProgress * THREE.MathUtils.degToRad(3);
 
     group.position.y = THREE.MathUtils.damp(group.position.y, targetY, 4.2, delta);
@@ -152,15 +188,23 @@ function MatryoshkaModel({
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.36, 0]}>
+    <group ref={groupRef} position={[0, -0.45, 0]}>
       <primitive object={model} />
       <HologramRing openProgress={openProgress} />
     </group>
   );
 }
 
-function Scene({ openProgress }: { openProgress: number }) {
-  const [cameraZ, setCameraZ] = useState(1.5);
+function Scene({
+  openProgress,
+  modelReady,
+  onModelReady,
+}: {
+  openProgress: number;
+  modelReady: boolean;
+  onModelReady: () => void;
+}) {
+  const [cameraZ, setCameraZ] = useState(2.7);
   const { camera } = useThree();
 
   useEffect(() => {
@@ -178,8 +222,10 @@ function Scene({ openProgress }: { openProgress: number }) {
       <directionalLight position={[-2.5, 1.3, -2.4]} intensity={0.78} color="#8f4bff" />
       <pointLight position={[0, 0.7, -1.9]} intensity={0.68} color="#ff3b7c" />
 
+      {!modelReady ? <MatryoshkaStandIn openProgress={openProgress} /> : null}
+
       <Suspense fallback={null}>
-        <MatryoshkaModel openProgress={openProgress} onFit={setCameraZ} />
+        <MatryoshkaModel openProgress={openProgress} onFit={setCameraZ} onReady={onModelReady} />
       </Suspense>
 
       <Sparkles
@@ -217,9 +263,20 @@ function Scene({ openProgress }: { openProgress: number }) {
 export function LandingHero3D() {
   const router = useRouter();
   const pushTimeoutRef = useRef<number | null>(null);
+  const warmTimeoutRef = useRef<number | null>(null);
 
   const [entered, setEntered] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [modelReady, setModelReady] = useState(false);
+  const handleModelReady = useCallback(() => {
+    setModelReady(true);
+  }, []);
+
+  const warmArena = useCallback(() => {
+    router.prefetch("/lobbies");
+    void fetch("/api/epoch-battle", { cache: "no-store" }).catch(() => undefined);
+    void fetch("/api/sounds", { cache: "force-cache" }).catch(() => undefined);
+  }, [router]);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
@@ -232,20 +289,28 @@ export function LandingHero3D() {
   }, []);
 
   useEffect(() => {
+    warmTimeoutRef.current = window.setTimeout(() => {
+      warmArena();
+    }, 160);
+
     return () => {
       if (pushTimeoutRef.current !== null) {
         window.clearTimeout(pushTimeoutRef.current);
       }
+      if (warmTimeoutRef.current !== null) {
+        window.clearTimeout(warmTimeoutRef.current);
+      }
     };
-  }, []);
+  }, [warmArena]);
 
   return (
-    <section className="relative min-h-[100dvh] overflow-hidden">
+    <section className="relative h-full min-h-0 overflow-hidden">
       <Canvas
         className="fixed inset-0 z-0"
         style={{ width: "100vw", height: "100vh", background: "transparent" }}
-        camera={{ position: [0, 0.06, 2.8], fov: 50 }}
-        dpr={[1, 1.5]}
+        camera={{ position: [0, 0.04, 2.72], fov: 46 }}
+        dpr={[1, 1.2]}
+        performance={{ min: 0.75 }}
         gl={{ alpha: true, antialias: true }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
@@ -253,14 +318,14 @@ export function LandingHero3D() {
           gl.toneMappingExposure = 1.18;
         }}
       >
-        <Scene openProgress={leaving ? 1 : 0} />
+        <Scene openProgress={leaving ? 1 : 0} modelReady={modelReady} onModelReady={handleModelReady} />
       </Canvas>
 
       <div className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(circle_at_50%_42%,rgba(95,47,180,0.24),transparent_45%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.24),transparent_36%),radial-gradient(circle_at_50%_82%,rgba(0,0,0,0.45),rgba(0,0,0,0.82)_72%)]" />
       <div className="pointer-events-none fixed inset-0 z-[2] opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
 
       <div
-        className={`pointer-events-none fixed inset-0 z-10 flex items-center justify-center px-4 pb-20 pt-24 transition-opacity duration-300 sm:px-6 ${
+        className={`pointer-events-none fixed inset-x-0 bottom-0 top-[var(--topbar-height)] z-10 flex items-center justify-center px-4 pb-12 pt-10 transition-opacity duration-300 sm:px-6 sm:pb-14 sm:pt-12 ${
           leaving ? "opacity-0" : "opacity-100"
         }`}
       >
@@ -284,11 +349,14 @@ export function LandingHero3D() {
                   return;
                 }
 
+                warmArena();
                 setLeaving(true);
                 pushTimeoutRef.current = window.setTimeout(() => {
                   router.push("/lobbies");
                 }, ENTER_TRANSITION_MS);
               }}
+              onMouseEnter={warmArena}
+              onFocus={warmArena}
               disabled={leaving}
               className="w-full max-w-xs rounded-xl border border-cyan-300/70 bg-cyan-300/20 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-300/35 disabled:opacity-70 sm:text-sm"
             >
