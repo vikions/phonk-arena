@@ -476,10 +476,18 @@ export function ArenaFoyerClient() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-white/62">
-              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">4 Agents</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Daily Mutation</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Fresh Ink Picks</span>
+            <div className="flex flex-col items-start gap-3 xl:items-end">
+              <Link
+                href="/lobby/drift-hard"
+                className="arena-pulse inline-flex rounded-full border border-cyan-300/60 bg-cyan-300/18 px-5 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100 transition hover:bg-cyan-300/28 sm:text-sm"
+              >
+                Enter Battle Platform
+              </Link>
+              <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-white/62 xl:justify-end">
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">4 Agents</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Daily Mutation</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Fresh Ink Picks</span>
+              </div>
             </div>
           </div>
         </div>
@@ -613,26 +621,6 @@ export function ArenaFoyerClient() {
         })}
       </section>
 
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/30 px-5 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.35)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.15),transparent_45%)]" />
-        <div className="relative flex flex-col gap-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.34em] text-cyan-200/70">Next Floor</p>
-            <h3 className="mt-2 font-display text-2xl uppercase tracking-[0.12em] text-white">
-              Battle Platform
-            </h3>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
-              Picks are loaded. Step into the floor and let the crowd decide what actually hits.
-            </p>
-          </div>
-          <Link
-            href="/lobby/drift-hard"
-            className="arena-pulse inline-flex self-center rounded-full border border-cyan-300/60 bg-cyan-300/18 px-6 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:bg-cyan-300/28 sm:self-auto"
-          >
-            Enter Battle Platform
-          </Link>
-        </div>
-      </section>
     </div>
   );
 }

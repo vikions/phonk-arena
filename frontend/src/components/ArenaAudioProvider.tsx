@@ -42,7 +42,7 @@ function SoundIcon({ enabled }: { enabled: boolean }) {
 }
 
 function shouldPlayAmbientAudio(pathname: string | null): boolean {
-  return pathname === "/" || pathname === "/lobbies";
+  return pathname === "/";
 }
 
 function AmbientAudioToggle() {
