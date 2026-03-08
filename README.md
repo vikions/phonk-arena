@@ -1,97 +1,197 @@
 # Phonk Arena
 
-Autonomous agents battle in a live music duel with real on-chain wagering on Ink.
+Phonk Arena is a live Ink-native music battle where four autonomous agents discover tokens from the Ink ecosystem, turn those tokens into phonk, and fight for the crown through live market performance.
 
-## What This Is
+Live product: [phonkarena.xyz](https://phonkarena.xyz/)
 
-`Phonk Arena` is a custom game mode (`Agent Music Duel`) where two AI-driven agents compete in continuous rounds:
+## What Makes It Different
 
-- agents generate evolving phonk performance states
-- users vote and place token wagers on outcomes
-- epoch winner is finalized on-chain
-- winners claim payouts on-chain
+Most onchain games stop at charts, votes, or simple PvP. Phonk Arena turns Ink token flow into a live audiovisual battleground:
 
-This is intentionally not a classic board/card game. The game is strategic and stateful: agent behavior adapts over time based on results, risk profile, and lobby conditions.
+- every epoch, each agent selects an Ink token
+- each selected token becomes the basis for that agent's sound
+- the browser generates phonk clips live from token metrics, agent DNA, and sample packs
+- users bet on the agent they believe will finish the epoch strongest
+- the winner is settled on-chain by token performance, not by popularity
 
-## Why It Fits The Bounty
+The result is a product that feels like a music arena, a market game, and an autonomous agent experiment at the same time.
 
-- Game type implemented: `Agent Music Duel` (non-traditional competitive game)
-- Real token wagering: on-chain `placeBet` + `claim`
-- Strategic decisions: agents mutate confidence, risk, intensity, and style based on outcomes
-- Bankroll handling: per-agent bankroll and epoch bet pools are tracked
-- Verifiable results: `vote`, `finalizeEpoch`, `claim` transactions on Ink
+## Four Agents
 
-## Core Flow
+Phonk Arena runs with four fixed agents:
 
-1. Connect wallet and switch to Ink mainnet.
-2. Enter a lobby with two competing agents.
-3. Vote and place bet during active epoch.
-4. At epoch end, contract finalization determines winner.
-5. User claims payout from contract if eligible.
+- `RAGE`: hunts volatility and pushes the hardest, most aggressive sound
+- `GHOST`: leans into holder behavior, dark texture, and ghosted vocal space
+- `ORACLE`: favors liquidity, volume, and steadier market conviction
+- `GLITCH`: embraces chaos and rotates through the most unstable corners of the board
 
-Important claim rule:
+Each agent has persistent DNA that shapes how it sounds:
 
-- claim target is always the previous epoch (`currentEpochId - 1`)
-- frontend auto-calls `finalizeEpoch` before `claim` when needed
+- `bpmRange`
+- `layerDensity`
+- `glitchIntensity`
+- `bassWeight`
+- `mutationVersion`
+- `wins / losses`
 
-## Strategy Layer (Not Random)
+## How The Product Works
 
-Each agent has runtime state including:
+### 1. Discover
 
-- `strategy`: `AGGRESSIVE | ADAPTIVE | SAFE`
-- `confidence`
-- `riskLevel`
-- `intensityBase`
-- `mutationSensitivity`
-- `bankroll`
+The system scans live Ink ecosystem tokens and ranks candidates with a strategy layer:
 
-During live play, the engine adjusts these values from vote outcomes and epoch outcomes. Winners and losers mutate differently, so behavior changes over time instead of random static play.
+- `RAGE`: prioritizes volatility
+- `GHOST`: prioritizes holder momentum and hype
+- `ORACLE`: prioritizes volume and liquidity
+- `GLITCH`: rotates through a seeded hype pool
 
-## Live Match Model
+Selections are tied to the active epoch, not to an arbitrary browser session.
 
-- clip playback cadence: `10s play + 2.5s pause`
-- epoch duration: `1 hour`
-- per-lobby isolated state and history
-- listener-driven loop starts when users are present
+### 2. Compose
 
-Lobbies:
+Each agent turns its selected Ink token into phonk.
 
-- `drift-hard`
-- `soft-night`
-- `chaos-lab`
+The audio engine uses:
 
-## Tech Stack
+- token price change
+- volume
+- holder count
+- liquidity
+- transaction activity
+- agent DNA
+- curated sample packs
 
-- Next.js 14 + TypeScript + Tailwind
-- wagmi + viem
-- WebAudio synthesis
-- server route-based match engine with persisted lobby snapshots in temp storage
+This means every selected Ink token creates a different musical result. The sound is not a fixed MP3 playlist. It is generated live in the browser from the token state and the agent profile.
 
-## On-Chain Integration
+### 3. Battle
 
-Frontend is wired to `PhonkArenaV2` ABI:
+The arena rotates through the four agents on a live floor:
 
-- ABI path: `frontend/src/lib/abi/PhonkArenaV2.json`
-- client bindings: `frontend/src/lib/contract.ts`
-- default address: `NEXT_PUBLIC_EPOCH_ARENA_ADDRESS` in `frontend/.env.example`
+- `10s` live clip
+- `2.5s` transition gap
+- listener-driven runtime
 
-Contract interactions used by UI:
+Users can enter the foyer, preview the agents, then move into the battle floor and place a bet.
 
-- `currentEpochId`
-- `vote`
+### 4. Settle
+
+The winner is not chosen by votes.
+
+At epoch close, the sidecar contract finalizes the epoch from token performance:
+
+- `Price Surge`: `55%`
+- `Volume`: `25%`
+- `Flow`: `10%`
+- `Liquidity`: `5%`
+- `Holder Flow`: `5%`
+
+Users who backed the winning agent can claim on-chain.
+
+## Why It Fits Ink
+
+Phonk Arena is built around Ink ecosystem assets, not around a generic chain abstraction.
+
+- the discovery layer is Ink-specific
+- the explorer and live token data are Ink-aware
+- betting and settlement happen on Ink
+- the product identity depends on Ink tokens becoming characters, sound, and competition
+
+The core idea is simple:
+
+> Tokens on Ink do not just trade. In Phonk Arena, they become music.
+
+## Current Product Surface
+
+### Landing
+
+The landing page introduces the arena identity and the live aesthetic.
+
+### Agent Foyer
+
+`/lobbies`
+
+Users see all four agents as premium character cards, inspect the current token each one is carrying, and preview the phonk that agent is generating right now.
+
+### Battle Arena
+
+`/lobby/[id]`
+
+The battle floor shows:
+
+- four agents around a live arena layout
+- active clip rotation
+- live leaderboard
+- on-chain market panel
+- betting
+- claim rail
+
+## On-Chain Design
+
+Phonk Arena currently uses a dedicated 4-way sidecar for the new arena flow.
+
+Frontend integration lives in:
+
+- [arenaSidecar.ts](frontend/src/lib/arenaSidecar.ts)
+- [PhonkArenaSidecar.json](frontend/src/lib/abi/PhonkArenaSidecar.json)
+
+The sidecar handles:
+
+- `recordTokenSelection`
 - `placeBet`
-- `getTally`
 - `finalizeEpoch`
+- `getEpochResult`
 - `claim`
-- `betA`, `betB`, `claimed`, `hasVoted`
+
+## Automation
+
+Epoch lifecycle is automated.
+
+The web app exposes protected admin routes:
+
+- `POST /api/admin/epoch-start`
+- `POST /api/admin/epoch-finalize`
+- `GET /api/admin/epoch-status`
+
+A dedicated cron runner calls them through:
+
+- [arena-sync.mjs](frontend/scripts/arena-sync.mjs)
+
+This means:
+
+- each new epoch gets its four token selections written on-chain
+- each closed epoch is finalized on-chain
+- the runtime stays in sync without manual daily intervention
+
+## Architecture
+
+### Frontend
+
+- Next.js 14
+- TypeScript
+- Tailwind
+- wagmi + viem
+- WebAudio / sample-driven phonk engine
+
+### Data Layer
+
+- InkyPump for token discovery
+- DexScreener for live market enrichment
+- PostgreSQL snapshots for holder history and delta tracking
+
+### Runtime
+
+- server-driven arena state
+- listener presence loop
+- epoch-aware token selection
+- on-chain settlement sidecar
 
 ## Repository Layout
 
-- `frontend/` app UI, lobby engine integration, API routes, WebAudio
-- `contracts/` legacy hardhat workspace (`PhonkArenaResults`) kept for reference
-- `backend/` experimental/offline generation assets and scripts
+- `frontend/`: main app, arena UI, API routes, audio engine, on-chain integration
+- `contracts/`: separate contract workspace
+- `backend/`: experimental or offline generation assets
 
-## Quick Start
+## Local Setup
 
 ```bash
 cd frontend
@@ -100,50 +200,48 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-Required env values in `frontend/.env.local`:
+## Required Environment Variables
+
+Frontend app:
 
 - `NEXT_PUBLIC_INK_RPC`
-- `NEXT_PUBLIC_EPOCH_ARENA_ADDRESS`
+- `NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS`
 - `NEXT_PUBLIC_CHAIN_ID`
 - `NEXT_PUBLIC_BLOCKSCOUT_API`
+- `DATABASE_URL`
 - `ADMIN_SECRET`
+- `ARENA_ORACLE_PRIVATE_KEY`
+- `ARENA_SYNC_BASE_URL`
 
-## Key Routes
+## Main Routes
 
-- `/` landing page
-- `/lobbies` lobby index
-- `/lobby/[id]` live battle + vote/bet/claim UI
+- `/`
+- `/lobbies`
+- `/lobby/[id]`
 
-## API Endpoints (Frontend App)
+## Main API Routes
 
-- `GET /api/match?lobbyId=...`
-- `GET /api/match?all=1`
-- `POST /api/presence/join`
-- `POST /api/presence/leave`
-- `POST /api/vote`
-- `POST /api/bet`
-- `POST /api/claim`
-- `POST /api/admin/start` (protected)
-- `POST /api/admin/reset` (protected)
+- `GET /api/epoch-battle`
+- `GET /api/arena/state`
+- `POST /api/arena/presence/join`
+- `POST /api/arena/presence/leave`
+- `POST /api/admin/epoch-start`
+- `POST /api/admin/epoch-finalize`
+- `GET /api/admin/epoch-status`
 
-## 3D Asset Attribution
+## Demo Notes
 
-- Landing background model: `Matryoshka`
+What matters most when reviewing the project:
+
+1. Four autonomous agents each bind themselves to a live Ink token.
+2. That token meaningfully changes the phonk they produce.
+3. The battle loop is live and listener-driven.
+4. Bets are placed on-chain.
+5. The winner is decided by token performance on Ink, not by a popularity contest.
+
+## Asset Attribution
+
+- Landing model: `Matryoshka`
 - Author: `Neo_minigan`
-- License: `CC Attribution` (`CC BY`)
+- License: `CC BY`
 - Source: https://sketchfab.com/3d-models/matryoshka-aeaec4f19c684a0fae818eff5078ec2d
-
-## Demo Checklist (For Judges)
-
-1. Show wallet connected on Ink and lobby opened.
-2. Show existing votes in current epoch.
-3. Place a bet and capture tx hash.
-4. Wait epoch rollover (or time-cut in video edit).
-5. Click `Claim Epoch #...` and capture claim tx hash in explorer.
-6. Confirm payout success.
-
-## Submission Notes
-
-- Demo video: [PhonkARENA_DEMO](https://x.com/varlamc88/status/2023049785884709068?s=20)
-- Ink explorer tx set: [TX](https://explorer.inkonchain.com/tx/0x855d6d133274d346798b6d0148f698f293c452f8be080795c1cf3112405bf25c)
-- Live URL: [PhonkARENA](https://phonkarena.xyz/)

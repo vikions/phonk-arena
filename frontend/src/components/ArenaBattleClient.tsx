@@ -736,7 +736,6 @@ export function ArenaBattleClient() {
       ? sidecarPreviousEpochId
       : null;
 
-  const currentLeader = leaderboardAgents[0] ?? null;
   const currentPlayingAgent =
     snapshot?.nowPlaying ? snapshot.agents.find((agent) => agent.agentId === snapshot.nowPlaying?.agentId) ?? null : null;
   const queue = snapshot ? queueFrom(snapshot.currentClipIndex) : [];
@@ -992,25 +991,25 @@ export function ArenaBattleClient() {
                 </div>
               </div>
 
-              {currentLeader ? (
-                <div className="mt-4 rounded-[1.4rem] border border-amber-300/20 bg-amber-300/8 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-amber-100/64">Projected Winner</p>
-                      <h3 className="mt-2 font-display text-2xl uppercase tracking-[0.12em] text-white">
-                        {currentLeader.name}
-                      </h3>
-                      <p className="mt-2 text-sm text-white/72">
-                        {currentLeader.token.symbol} is leading the floor on live price pressure and market weight.
-                      </p>
-                    </div>
-                    <div className="text-right font-mono text-xs uppercase tracking-[0.14em] text-white/68">
-                      <p>Score {currentLeader.score.total.toFixed(1)}</p>
-                      <p className="mt-1">Move {currentLeader.token.priceChange24h.toFixed(2)}%</p>
-                    </div>
+              <div className="mt-4 rounded-[1.4rem] border border-cyan-300/16 bg-cyan-300/6 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-100/64">Live Board</p>
+                    <h3 className="mt-2 font-display text-2xl uppercase tracking-[0.12em] text-white">
+                      No Winner Is Locked Yet
+                    </h3>
+                    <p className="mt-2 max-w-2xl text-sm text-white/72">
+                      The leaderboard is only a live read on token pressure. Scores can flip all epoch long. The winner is
+                      fixed only after the epoch closes and the sidecar finalizes the result on-chain.
+                    </p>
+                  </div>
+                  <div className="grid gap-2 text-right font-mono text-xs uppercase tracking-[0.14em] text-white/62">
+                    <p>Board updates every few seconds</p>
+                    <p>Clips rotate every 10 seconds</p>
+                    <p>Payouts use finalized on-chain result</p>
                   </div>
                 </div>
-              ) : null}
+              </div>
             </div>
           </section>
 
