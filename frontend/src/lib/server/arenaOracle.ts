@@ -1,11 +1,10 @@
 import "server-only";
 
-import { createWalletClient, http, type WalletClient } from "viem";
+import { createWalletClient, type WalletClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { inkMainnet } from "@/lib/inkChain";
-
-const DEFAULT_RPC_URL = "https://rpc-gel.inkonchain.com";
+import { getInkRpcTransport } from "@/lib/inkRpc";
 
 export function isAdminAuthorized(request: Request): boolean {
   const secret = process.env.ADMIN_SECRET?.trim();
@@ -41,6 +40,6 @@ export function getArenaOracleWalletClient(): WalletClient {
   return createWalletClient({
     account,
     chain: inkMainnet,
-    transport: http(process.env.NEXT_PUBLIC_INK_RPC || DEFAULT_RPC_URL),
+    transport: getInkRpcTransport(),
   });
 }

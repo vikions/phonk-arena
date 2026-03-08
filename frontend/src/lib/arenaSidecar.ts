@@ -1,11 +1,11 @@
 import type { Abi, Address, PublicClient, WalletClient } from "viem";
-import { createPublicClient, getAddress, http, isAddress } from "viem";
+import { createPublicClient, getAddress, isAddress } from "viem";
 
 import phonkArenaSidecarAbiJson from "@/lib/abi/PhonkArenaSidecar.json";
 import { inkMainnet } from "@/lib/inkChain";
+import { DEFAULT_INK_RPC_URL, getInkRpcTransport, getInkRpcUrl } from "@/lib/inkRpc";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
-const DEFAULT_RPC_URL = "https://rpc-gel.inkonchain.com";
 const DEFAULT_ARENA_SIDECAR_ADDRESS = "0xa21bbff7b8aD238F58B825e77191617568D0E809";
 
 function normalizeAddress(value: string | undefined): Address | null {
@@ -24,7 +24,7 @@ function getReadonlyClient(publicClient?: PublicClient): PublicClient {
 
   return createPublicClient({
     chain: inkMainnet,
-    transport: http(process.env.NEXT_PUBLIC_INK_RPC || DEFAULT_RPC_URL),
+    transport: getInkRpcTransport(),
   });
 }
 
@@ -73,6 +73,7 @@ function toBigIntValue(value: unknown): bigint {
 const parsedAbi = (phonkArenaSidecarAbiJson as { abi?: Abi }).abi;
 
 export const arenaSidecarAbi = (Array.isArray(parsedAbi) ? parsedAbi : []) as Abi;
+export const arenaSidecarRpcUrl = getInkRpcUrl() || DEFAULT_INK_RPC_URL;
 export const arenaSidecarAddress = (normalizeAddress(process.env.NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS) ??
   normalizeAddress(DEFAULT_ARENA_SIDECAR_ADDRESS) ??
   ZERO_ADDRESS) as Address;

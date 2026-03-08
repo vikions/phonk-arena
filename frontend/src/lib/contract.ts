@@ -1,12 +1,12 @@
 import type { Abi, Address, PublicClient, WalletClient } from "viem";
-import { createPublicClient, getAddress, http, isAddress, pad, stringToHex } from "viem";
+import { createPublicClient, getAddress, isAddress, pad, stringToHex } from "viem";
 
 import phonkArenaV2AbiJson from "@/lib/abi/PhonkArenaV2.json";
 import { inkMainnet } from "@/lib/inkChain";
+import { getInkRpcTransport, getInkRpcUrl } from "@/lib/inkRpc";
 import type { VoteSide } from "@/lib/types";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
-const DEFAULT_RPC_URL = "https://rpc-gel.inkonchain.com";
 
 function normalizeAddress(value: string | undefined): Address | null {
   const trimmed = value?.trim();
@@ -203,7 +203,7 @@ const parsedAbi = (phonkArenaV2AbiJson as { abi?: Abi }).abi;
 export const hasRuntimeEpochArenaAbi = Array.isArray(parsedAbi) && parsedAbi.length > 0;
 export const epochArenaAbi = (hasRuntimeEpochArenaAbi ? parsedAbi : fallbackEpochArenaAbi) as Abi;
 
-export const epochArenaRpcUrl = process.env.NEXT_PUBLIC_INK_RPC || DEFAULT_RPC_URL;
+export const epochArenaRpcUrl = getInkRpcUrl();
 const parsedChainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? inkMainnet.id);
 export const epochArenaChainId = Number.isFinite(parsedChainId) ? parsedChainId : inkMainnet.id;
 
@@ -263,7 +263,7 @@ function getReadonlyClient(publicClient?: PublicClient): PublicClient {
 
   return createPublicClient({
     chain: inkMainnet,
-    transport: http(epochArenaRpcUrl),
+    transport: getInkRpcTransport(),
   });
 }
 

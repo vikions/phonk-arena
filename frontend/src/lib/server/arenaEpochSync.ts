@@ -147,7 +147,11 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
 
   const isOpen = await isArenaSidecarEpochOpen(targetEpochId);
   if (isOpen === null) {
-    throw new Error(`Unable to read open state for epoch ${targetEpochId.toString()}.`);
+    return {
+      epochId: Number(targetEpochId),
+      action: "skipped",
+      reason: "open_state_unavailable",
+    };
   }
 
   if (isOpen) {

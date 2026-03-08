@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http } from "viem";
+import { createPublicClient } from "viem";
 
 import {
   getArenaSidecarCurrentEpochId,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/arenaSidecar";
 import { getAgentDNA } from "@/lib/contract";
 import { inkMainnet } from "@/lib/inkChain";
+import { getInkRpcTransport } from "@/lib/inkRpc";
 import { isAdminAuthorized } from "@/lib/server/arenaOracle";
 import { getDiscoveryDailySeed, getLiveAgentTokenPicksForEpoch } from "@/lib/server/tokenDiscovery";
 import { getSnapshotBackend } from "@/lib/server/tokenSnapshotStore";
@@ -24,8 +25,6 @@ const AGENT_NAMES: Record<0 | 1 | 2 | 3, string> = {
   3: "GLITCH",
 };
 
-const DEFAULT_RPC_URL = "https://rpc-gel.inkonchain.com";
-
 export async function GET(request: NextRequest) {
   if (!isAdminAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,7 +33,7 @@ export async function GET(request: NextRequest) {
   try {
     const publicClient = createPublicClient({
       chain: inkMainnet,
-      transport: http(process.env.NEXT_PUBLIC_INK_RPC || DEFAULT_RPC_URL),
+      transport: getInkRpcTransport(),
     });
 
     let epochId = getDiscoveryDailySeed();
