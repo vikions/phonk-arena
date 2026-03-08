@@ -38,6 +38,7 @@ interface DecodedSample {
 interface MelodySourceBuckets {
   cowbells: string[];
   loops: string[];
+  voices: string[];
   atmos: string[];
 }
 
@@ -290,6 +291,7 @@ function splitMelodySources(urls: string[]): MelodySourceBuckets {
   const buckets: MelodySourceBuckets = {
     cowbells: [],
     loops: [],
+    voices: [],
     atmos: [],
   };
 
@@ -298,6 +300,11 @@ function splitMelodySources(urls: string[]): MelodySourceBuckets {
 
     if (key.includes("cowbell") || key.includes("one shot")) {
       buckets.cowbells.push(url);
+      continue;
+    }
+
+    if (key.includes("vox") || key.includes("acapella")) {
+      buckets.voices.push(url);
       continue;
     }
 
@@ -451,6 +458,7 @@ function resolveProfile(
     profile.gainSkew = adjustCategoryMap(profile.gainSkew, "fx", 0.12);
     profile.gainSkew = adjustCategoryMap(profile.gainSkew, "kicks", -0.08);
     profile.preferredHints.fx = [...(profile.preferredHints.fx ?? []), "atmo", "vox", "reverse"];
+    profile.preferredHints.melodies = [...(profile.preferredHints.melodies ?? []), "vox", "acapella", "sample"];
   }
 
   if (agentPersona === "ORACLE") {
@@ -461,7 +469,7 @@ function resolveProfile(
     profile.gainSkew = adjustCategoryMap(profile.gainSkew, "bass", 0.04);
     profile.gainSkew = adjustCategoryMap(profile.gainSkew, "melodies", 0.08);
     profile.gainSkew = adjustCategoryMap(profile.gainSkew, "fx", -0.06);
-    profile.preferredHints.melodies = [...(profile.preferredHints.melodies ?? []), "loop", "phrygian"];
+    profile.preferredHints.melodies = [...(profile.preferredHints.melodies ?? []), "loop", "phrygian", "sample", "atmo"];
   }
 
   if (agentPersona === "GLITCH") {
@@ -473,6 +481,7 @@ function resolveProfile(
     profile.fxCadence = Math.max(4, profile.fxCadence - 2);
     profile.gainSkew = adjustCategoryMap(profile.gainSkew, "fx", 0.14);
     profile.preferredHints.fx = [...(profile.preferredHints.fx ?? []), "reverse", "impact", "sweep"];
+    profile.preferredHints.melodies = [...(profile.preferredHints.melodies ?? []), "vox", "acapella", "sample"];
   }
 
   if (lobbyId === "drift-hard") {
@@ -582,6 +591,14 @@ function sampleWeight(
     if (key.includes(identityHint)) {
       score += 0.4;
     }
+  }
+
+  if (key.includes("violencia")) {
+    score += category === "melodies" || category === "fx" ? 0.7 : 0.35;
+  }
+
+  if (category === "melodies" && (key.includes("vox") || key.includes("acapella") || key.includes("sample"))) {
+    score += 0.55;
   }
 
   for (const mismatchHint of CATEGORY_MISMATCH_HINTS[category] ?? []) {
@@ -960,7 +977,7 @@ export async function renderPhonkClip({
   const manifest = await getSoundManifest();
   const melodyBuckets = splitMelodySources(manifest.melodies);
 
-  const [kickPool, snarePool, hatPool, bassPool, cowbellPool, melodyLoopPool, melodyAtmosPool, fxPool] =
+  const [kickPool, snarePool, hatPool, bassPool, cowbellPool, melodyLoopPool, voicePool, melodyAtmosPool, fxPool] =
     await Promise.all([
       buildPool(context, manifest.kicks, "kicks", style, profile, seededRand, mutation, 6),
       buildPool(context, manifest.snares, "snares", style, profile, seededRand, mutation, 6),
@@ -968,6 +985,7 @@ export async function renderPhonkClip({
       buildPool(context, manifest.bass, "bass", style, profile, seededRand, mutation, 4),
       buildPool(context, melodyBuckets.cowbells, "melodies", style, profile, seededRand, mutation, 6),
       buildPool(context, melodyBuckets.loops, "melodies", style, profile, seededRand, mutation, 3),
+      buildPool(context, melodyBuckets.voices, "melodies", style, profile, seededRand, mutation, 6),
       buildPool(context, melodyBuckets.atmos, "melodies", style, profile, seededRand, mutation, 3),
       buildPool(context, manifest.fx, "fx", style, profile, seededRand, mutation, 4),
     ]);
@@ -1049,6 +1067,22 @@ export async function renderPhonkClip({
   textureSidechain.connect(texturePan);
   texturePan.connect(master);
 
+  const voiceBus = context.createGain();
+  voiceBus.gain.value = (style === "SOFT" ? 0.38 : 0.3) + fxRatio * 0.16;
+  const voiceHighpass = context.createBiquadFilter();
+  voiceHighpass.type = "highpass";
+  voiceHighpass.frequency.value = 280;
+  const voiceLowpass = context.createBiquadFilter();
+  voiceLowpass.type = "lowpass";
+  voiceLowpass.frequency.value = style === "SOFT" ? 5600 : 5000;
+  const voiceSidechain = context.createGain();
+  voiceSidechain.gain.value = 1;
+
+  voiceBus.connect(voiceHighpass);
+  voiceHighpass.connect(voiceLowpass);
+  voiceLowpass.connect(voiceSidechain);
+  voiceSidechain.connect(master);
+
   const baseStep = (60 / grooveBpm) / 2;
   const steps = Math.floor(durationSec / baseStep);
 
@@ -1060,6 +1094,7 @@ export async function renderPhonkClip({
   const pickState: Partial<Record<SoundCategory, number>> = {};
   const leadPickState: Partial<Record<SoundCategory, number>> = {};
   const loopPickState: Partial<Record<SoundCategory, number>> = {};
+  const voicePickState: Partial<Record<SoundCategory, number>> = {};
   const atmosPickState: Partial<Record<SoundCategory, number>> = {};
 
   for (let i = 0; i < steps; i += 1) {
@@ -1111,6 +1146,12 @@ export async function renderPhonkClip({
         t,
         style === "HARD" ? 0.54 : 0.38,
         baseStep * 0.55,
+      );
+      scheduleDuck(
+        voiceSidechain.gain,
+        t,
+        style === "HARD" ? 0.24 : 0.18,
+        baseStep * 0.45,
       );
     }
 
@@ -1269,6 +1310,37 @@ export async function renderPhonkClip({
           release: baseStep * (3.6 + seededRand() * 1.4),
           maxDuration: baseStep * 6.2,
         });
+      }
+    }
+
+    const voicePresenceBoost =
+      agentPersona === "GHOST" ? 0.22 : agentPersona === "GLITCH" ? 0.18 : agentPersona === "ORACLE" ? 0.08 : 0.03;
+    const voiceCadence = Math.max(4, profile.fxCadence - 3);
+    const voiceTrigger =
+      voicePool.length > 0 &&
+      i % voiceCadence === 0 &&
+      seededRand() < clamp(0.08 + fxRatio * 0.2 + mutation * 0.14 + voicePresenceBoost, 0.05, 0.86);
+
+    if (voiceTrigger) {
+      const voice = pickBuffer(voicePool, seededRand, "melodies", voicePickState);
+      if (voice) {
+        scheduleBuffer(context, voiceBus, voice.buffer, t + seededRand() * 0.03, {
+          gain: clamp((style === "SOFT" ? 0.22 : 0.18) + fxRatio * 0.12 + voicePresenceBoost * 0.35, 0.12, 0.42),
+          playbackRate: clamp((0.82 + seededRand() * 0.18) * profile.playbackSkew.melodies, 0.65, 1.25),
+          attack: 0.002,
+          release: baseStep * (2.8 + seededRand() * 1.4),
+          maxDuration: baseStep * 4.6,
+        });
+
+        if ((agentPersona === "GHOST" || agentPersona === "GLITCH") && seededRand() < 0.32) {
+          scheduleBuffer(context, voiceBus, voice.buffer, t + baseStep * 0.52, {
+            gain: clamp(0.1 + voicePresenceBoost * 0.24, 0.08, 0.24),
+            playbackRate: clamp(0.9 + seededRand() * 0.22, 0.7, 1.3),
+            attack: 0.001,
+            release: baseStep * 1.8,
+            maxDuration: baseStep * 3,
+          });
+        }
       }
     }
 

@@ -497,7 +497,10 @@ export function ArenaFoyerClient() {
                   <div className="flex items-end justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-[0.24em] text-white/46">Held Today</p>
-                      <p className="break-all font-display text-[clamp(1.2rem,1.4vw+0.9rem,1.75rem)] uppercase leading-[0.95] tracking-[0.06em] text-white">
+                      <p
+                        title={state.token?.symbol ?? undefined}
+                        className="overflow-hidden text-ellipsis whitespace-nowrap font-display text-[clamp(0.98rem,0.82vw+0.78rem,1.28rem)] uppercase leading-none tracking-[0.05em] text-white"
+                      >
                         {state.token?.symbol ?? (loading ? "SYNCING" : "NO PICK")}
                       </p>
                     </div>
@@ -523,28 +526,31 @@ export function ArenaFoyerClient() {
                     </div>
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={() => void togglePreview(agent)}
+                    disabled={!state.token || isPreviewLoading}
+                    className="mt-3 inline-flex w-full items-center justify-center rounded-[1rem] border border-white/15 bg-white/7 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/90 transition hover:border-white/30 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isPreviewLoading
+                      ? "Building Today's Phonk..."
+                      : isPreviewPlaying
+                        ? "Stop Today's Phonk"
+                        : "Hear Today's Phonk"}
+                  </button>
+
                   <div className="mt-3 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-white/58">
                     <span className="font-mono">BPM {state.dna.bpmRange}</span>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => void togglePreview(agent)}
-                        disabled={!state.token || isPreviewLoading}
-                        className="rounded-full border border-white/15 bg-white/6 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/86 transition hover:border-white/30 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                    {state.token?.pairUrl ? (
+                      <Link
+                        href={state.token.pairUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="transition hover:text-white"
                       >
-                        {isPreviewLoading ? "Building..." : isPreviewPlaying ? "Stop Phonk" : "Play Phonk"}
-                      </button>
-                      {state.token?.pairUrl ? (
-                        <Link
-                          href={state.token.pairUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="transition hover:text-white"
-                        >
-                          Trace
-                        </Link>
-                      ) : null}
-                    </div>
+                        Market Trace
+                      </Link>
+                    ) : null}
                   </div>
 
                   {previewErrorAgentId === agent.agentId && previewError ? (
