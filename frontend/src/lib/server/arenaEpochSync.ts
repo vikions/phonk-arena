@@ -168,19 +168,29 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
     };
   }
 
-  const selections = await Promise.all(
-    AGENT_IDS.map(async (agentId) => {
-      const selection = await getArenaSidecarTokenSelection(targetEpochId, agentId);
-      if (!selection?.recorded) {
-        throw new Error(`Missing recorded selection for agent ${agentId} in epoch ${targetEpochId.toString()}.`);
-      }
-
-      return {
-        agentId,
-        selection,
-      };
-    }),
+  const rawSelections = await Promise.all(
+    AGENT_IDS.map(async (agentId) => ({
+      agentId,
+      selection: await getArenaSidecarTokenSelection(targetEpochId, agentId),
+    })),
   );
+  const missingAgentIds = rawSelections
+    .filter((entry) => !entry.selection?.recorded)
+    .map((entry) => entry.agentId);
+
+  if (missingAgentIds.length > 0) {
+    return {
+      epochId: Number(targetEpochId),
+      action: "skipped",
+      reason: "incomplete_selections",
+      missingAgentIds,
+    };
+  }
+
+  const selections = rawSelections as Array<{
+    agentId: (typeof AGENT_IDS)[number];
+    selection: NonNullable<(typeof rawSelections)[number]["selection"]>;
+  }>;
 
   const metricsByAddress = await getLiveArenaTokenMetrics(
     selections.map((entry) => entry.selection.tokenAddress),
