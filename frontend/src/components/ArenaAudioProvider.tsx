@@ -11,6 +11,7 @@ interface ArenaAudioContextValue {
   soundEnabled: boolean;
   awaitingInteraction: boolean;
   toggleSound: () => void;
+  setPreviewSuppressed: (suppressed: boolean) => void;
 }
 
 const ArenaAudioContext = createContext<ArenaAudioContextValue | null>(null);
@@ -82,6 +83,7 @@ export function ArenaAudioProvider({ children }: { children: React.ReactNode }) 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [awaitingInteraction, setAwaitingInteraction] = useState(false);
+  const [previewSuppressed, setPreviewSuppressed] = useState(false);
 
   useEffect(() => {
     const audio = new Audio(AMBIENT_AUDIO_SRC);
@@ -112,7 +114,7 @@ export function ArenaAudioProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    if (!soundEnabled || !shouldPlayAmbientAudio(pathname)) {
+    if (!soundEnabled || previewSuppressed || !shouldPlayAmbientAudio(pathname)) {
       audio.pause();
       setAwaitingInteraction(false);
       return;
@@ -127,7 +129,7 @@ export function ArenaAudioProvider({ children }: { children: React.ReactNode }) 
         setAwaitingInteraction(true);
       },
     );
-  }, [pathname, soundEnabled]);
+  }, [pathname, previewSuppressed, soundEnabled]);
 
   useEffect(() => {
     if (!soundEnabled || !awaitingInteraction) {
@@ -168,6 +170,7 @@ export function ArenaAudioProvider({ children }: { children: React.ReactNode }) 
         soundEnabled,
         awaitingInteraction,
         toggleSound: () => setSoundEnabled((value) => !value),
+        setPreviewSuppressed,
       }}
     >
       {children}

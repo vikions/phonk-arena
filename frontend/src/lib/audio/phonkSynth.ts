@@ -13,6 +13,7 @@ interface RenderPhonkClipInput {
   lobbyId: LobbyId;
   agentId: AgentId;
   strategy: AgentStrategy;
+  agentPersona?: "RAGE" | "GHOST" | "ORACLE" | "GLITCH";
 }
 
 interface SoundManifest {
@@ -27,6 +28,18 @@ interface SoundManifest {
 type SoundCategory = keyof SoundManifest;
 
 type CategoryNumberMap = Record<SoundCategory, number>;
+
+interface DecodedSample {
+  url: string;
+  buffer: AudioBuffer;
+  rootMidi: number;
+}
+
+interface MelodySourceBuckets {
+  cowbells: string[];
+  loops: string[];
+  atmos: string[];
+}
 
 interface AgentAudioProfile {
   swing: number;
@@ -56,6 +69,38 @@ const EMPTY_MANIFEST: SoundManifest = {
 };
 
 const CATEGORIES: SoundCategory[] = ["kicks", "snares", "hats", "bass", "fx", "melodies"];
+const PHRYGIAN_INTERVALS = [0, 1, 3, 5, 7, 8, 10] as const;
+const HARD_LEAD_SHAPES = [
+  [0, 0, 3, 1, 0, 5, 3, 1],
+  [0, 1, 3, 5, 3, 1, 0, 7],
+  [0, 0, 1, 3, 5, 3, 1, 0],
+] as const;
+const SOFT_LEAD_SHAPES = [
+  [0, 3, 1, 0, 5, 3, 1, 0],
+  [0, 1, 0, 3, 5, 3, 1, 0],
+  [0, 3, 5, 3, 1, 0, 1, 0],
+] as const;
+const BASS_PATTERNS = [
+  [0, 0, -3, 0, -5, -3, 0, -1],
+  [0, -1, -3, 0, -5, -3, -1, 0],
+  [0, 0, -5, -3, 0, -1, -3, 0],
+] as const;
+const CATEGORY_IDENTITY_HINTS: Record<SoundCategory, string[]> = {
+  kicks: ["kick", "808"],
+  snares: ["snare", "clap", "rim"],
+  hats: ["hat", "hh", "ride", "shaker", "open"],
+  bass: ["808", "bass", "sub"],
+  fx: ["fx", "impact", "sweep", "uplifter", "reverse", "vox", "atmo"],
+  melodies: ["cowbell", "melody", "loop", "intro"],
+};
+const CATEGORY_MISMATCH_HINTS: Partial<Record<SoundCategory, string[]>> = {
+  kicks: ["snare", "clap", "rim", "hat"],
+  snares: ["kick", "hat", "808 loop"],
+  hats: ["kick", "snare", "clap", "rim", "bass"],
+  bass: ["kick", "snare", "clap", "hat"],
+  fx: ["kick", "snare", "hat", "808"],
+  melodies: ["kick", "snare", "clap", "rim"],
+};
 
 const HARD_HINTS: Record<SoundCategory, string[]> = {
   kicks: ["kick", "808", "hard", "disrupted", "neurotic", "lunatic"],
@@ -180,6 +225,145 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+function noteNameToSemitone(note: string): number | null {
+  switch (note.toUpperCase()) {
+    case "C":
+      return 0;
+    case "C#":
+    case "DB":
+      return 1;
+    case "D":
+      return 2;
+    case "D#":
+    case "EB":
+      return 3;
+    case "E":
+      return 4;
+    case "F":
+      return 5;
+    case "F#":
+    case "GB":
+      return 6;
+    case "G":
+      return 7;
+    case "G#":
+    case "AB":
+      return 8;
+    case "A":
+      return 9;
+    case "A#":
+    case "BB":
+      return 10;
+    case "B":
+      return 11;
+    default:
+      return null;
+  }
+}
+
+function extractSampleRootMidi(url: string, fallbackMidi = 48): number {
+  const normalized = decodeURIComponent(url).toUpperCase();
+  const matches = [...normalized.matchAll(/[\s\-_\(]([A-G](?:#|B)?)(?=[\s\-_)\.])/g)];
+
+  for (let i = matches.length - 1; i >= 0; i -= 1) {
+    const candidate = matches[i]?.[1];
+    if (!candidate) {
+      continue;
+    }
+
+    const semitone = noteNameToSemitone(candidate);
+    if (semitone === null) {
+      continue;
+    }
+
+    return 48 + semitone;
+  }
+
+  return fallbackMidi;
+}
+
+function playbackRateForMidi(rootMidi: number, targetMidi: number): number {
+  return 2 ** ((targetMidi - rootMidi) / 12);
+}
+
+function splitMelodySources(urls: string[]): MelodySourceBuckets {
+  const buckets: MelodySourceBuckets = {
+    cowbells: [],
+    loops: [],
+    atmos: [],
+  };
+
+  for (const url of urls) {
+    const key = decodeURIComponent(url).toLowerCase();
+
+    if (key.includes("cowbell") || key.includes("one shot")) {
+      buckets.cowbells.push(url);
+      continue;
+    }
+
+    if (key.includes("loop") || key.includes("intro") || /\b\d{3}\s*bpm\b/.test(key)) {
+      buckets.loops.push(url);
+      continue;
+    }
+
+    buckets.atmos.push(url);
+  }
+
+  return buckets;
+}
+
+function clampMidi(note: number): number {
+  return clamp(note, 34, 67);
+}
+
+function chooseLeadMidi(
+  rootMidi: number,
+  style: AgentStyle,
+  strategy: AgentStrategy,
+  phraseIndex: number,
+  mutation: number,
+  rand: () => number,
+): number {
+  const shapes = style === "HARD" ? HARD_LEAD_SHAPES : SOFT_LEAD_SHAPES;
+  const shape = shapes[phraseIndex % shapes.length] ?? shapes[0];
+  const step = shape[phraseIndex % shape.length] ?? 0;
+  const interval = PHRYGIAN_INTERVALS[step % PHRYGIAN_INTERVALS.length] ?? 0;
+  let note = rootMidi + interval;
+
+  if (strategy === "AGGRESSIVE" && phraseIndex % 4 === 3) {
+    note += 12;
+  }
+
+  if (strategy === "SAFE" && phraseIndex % 4 === 1) {
+    note -= 12;
+  }
+
+  if (mutation > 0.72 && rand() < 0.22) {
+    note += rand() < 0.5 ? -12 : 12;
+  }
+
+  return clampMidi(note);
+}
+
+function chooseBassMidi(rootMidi: number, phraseIndex: number, mutation: number, rand: () => number): number {
+  const pattern = BASS_PATTERNS[phraseIndex % BASS_PATTERNS.length] ?? BASS_PATTERNS[0];
+  let note = rootMidi + (pattern[phraseIndex % pattern.length] ?? 0);
+
+  if (mutation > 0.68 && rand() < 0.18) {
+    note += rand() < 0.5 ? -12 : 12;
+  }
+
+  return clampMidi(note);
+}
+
+function scheduleDuck(param: AudioParam, startTime: number, depth: number, release: number): void {
+  const duckFloor = clamp(1 - depth, 0.12, 0.92);
+  param.cancelScheduledValues(startTime);
+  param.setValueAtTime(1, startTime);
+  param.linearRampToValueAtTime(duckFloor, startTime + 0.008);
+  param.exponentialRampToValueAtTime(1, startTime + release);
+}
+
 function createDistortionCurve(amount: number): Float32Array<ArrayBuffer> {
   const samples = 44_100;
   const curve = new Float32Array(samples) as Float32Array<ArrayBuffer>;
@@ -242,8 +426,54 @@ function resolveProfile(
   style: AgentStyle,
   mutation: number,
   rand: () => number,
+  agentPersona?: "RAGE" | "GHOST" | "ORACLE" | "GLITCH",
 ): AgentAudioProfile {
   let profile = cloneProfile(agentId === "A" ? BASE_PROFILE_A : BASE_PROFILE_B);
+
+  if (agentPersona === "RAGE") {
+    profile.kickPattern = offsetPattern(profile.kickPattern, 0.1);
+    profile.snarePattern = offsetPattern(profile.snarePattern, 0.04);
+    profile.bassCadence = Math.max(1, profile.bassCadence - 1);
+    profile.melodyCadence = Math.max(3, profile.melodyCadence - 2);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "kicks", 0.12);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "bass", 0.14);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "fx", -0.08);
+    profile.preferredHints.kicks = [...(profile.preferredHints.kicks ?? []), "hard", "disrupted"];
+    profile.preferredHints.melodies = [...(profile.preferredHints.melodies ?? []), "cowbell"];
+  }
+
+  if (agentPersona === "GHOST") {
+    profile.swing = clamp(profile.swing + 0.06, -0.2, 0.2);
+    profile.kickPattern = offsetPattern(profile.kickPattern, -0.08);
+    profile.hatPattern = offsetPattern(profile.hatPattern, 0.06);
+    profile.fxCadence = Math.max(5, profile.fxCadence - 2);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "melodies", 0.12);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "fx", 0.12);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "kicks", -0.08);
+    profile.preferredHints.fx = [...(profile.preferredHints.fx ?? []), "atmo", "vox", "reverse"];
+  }
+
+  if (agentPersona === "ORACLE") {
+    profile.swing = clamp(profile.swing - 0.02, -0.2, 0.2);
+    profile.kickPattern = offsetPattern(profile.kickPattern, -0.02);
+    profile.melodyCadence = Math.max(3, profile.melodyCadence - 1);
+    profile.fxCadence += 2;
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "bass", 0.04);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "melodies", 0.08);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "fx", -0.06);
+    profile.preferredHints.melodies = [...(profile.preferredHints.melodies ?? []), "loop", "phrygian"];
+  }
+
+  if (agentPersona === "GLITCH") {
+    const glitchAmount = 0.12 + mutation * 0.18;
+    profile.kickPattern = jitterPattern(profile.kickPattern, glitchAmount, rand);
+    profile.snarePattern = jitterPattern(profile.snarePattern, glitchAmount, rand);
+    profile.hatPattern = jitterPattern(profile.hatPattern, glitchAmount + 0.04, rand);
+    profile.swing = clamp(profile.swing + (rand() - 0.5) * 0.12, -0.2, 0.2);
+    profile.fxCadence = Math.max(4, profile.fxCadence - 2);
+    profile.gainSkew = adjustCategoryMap(profile.gainSkew, "fx", 0.14);
+    profile.preferredHints.fx = [...(profile.preferredHints.fx ?? []), "reverse", "impact", "sweep"];
+  }
 
   if (lobbyId === "drift-hard") {
     profile.kickPattern = offsetPattern(profile.kickPattern, 0.08);
@@ -348,7 +578,19 @@ function sampleWeight(
     }
   }
 
-  return score + mutationLevel * randomBoost;
+  for (const identityHint of CATEGORY_IDENTITY_HINTS[category]) {
+    if (key.includes(identityHint)) {
+      score += 0.4;
+    }
+  }
+
+  for (const mismatchHint of CATEGORY_MISMATCH_HINTS[category] ?? []) {
+    if (key.includes(mismatchHint)) {
+      score -= 0.8;
+    }
+  }
+
+  return Math.max(0.15, score + mutationLevel * randomBoost);
 }
 
 function weightedPick(
@@ -456,7 +698,7 @@ async function buildPool(
   rand: () => number,
   mutationLevel: number,
   targetSize: number,
-): Promise<AudioBuffer[]> {
+): Promise<DecodedSample[]> {
   if (urls.length === 0) {
     return [];
   }
@@ -472,15 +714,28 @@ async function buildPool(
   const unique = [...new Set(selected)];
   const decoded = await Promise.all(unique.map((url) => decodeSample(context, url)));
 
-  return decoded.filter((buffer): buffer is AudioBuffer => Boolean(buffer));
+  return decoded.flatMap((buffer, index) => {
+    if (!buffer) {
+      return [];
+    }
+
+    const url = unique[index] ?? "";
+    return [
+      {
+        url,
+        buffer,
+        rootMidi: extractSampleRootMidi(url, category === "bass" ? 36 : 48),
+      },
+    ];
+  });
 }
 
 function pickBuffer(
-  pool: AudioBuffer[],
+  pool: DecodedSample[],
   rand: () => number,
   category: SoundCategory,
   state: Partial<Record<SoundCategory, number>>,
-): AudioBuffer | null {
+): DecodedSample | null {
   if (pool.length === 0) {
     return null;
   }
@@ -665,6 +920,7 @@ export async function renderPhonkClip({
   lobbyId,
   agentId,
   strategy,
+  agentPersona,
 }: RenderPhonkClipInput): Promise<AudioBuffer> {
   const drive = clamp(intensity, 0, 1);
   const mutation = clamp(mutationLevel ?? 0.5, 0, 1);
@@ -672,11 +928,11 @@ export async function renderPhonkClip({
 
   const seededRand = mulberry32(
     hashSeed(
-      `${seed}:${lobbyId}:${agentId}:${strategy}:${style}:${drive.toFixed(3)}:${mutation.toFixed(3)}:${density.toFixed(3)}`,
+      `${seed}:${lobbyId}:${agentId}:${agentPersona ?? "DEFAULT"}:${strategy}:${style}:${drive.toFixed(3)}:${mutation.toFixed(3)}:${density.toFixed(3)}`,
     ),
   );
 
-  const profile = resolveProfile(lobbyId, agentId, strategy, style, mutation, seededRand);
+  const profile = resolveProfile(lobbyId, agentId, strategy, style, mutation, seededRand, agentPersona);
   const distortionAmount = clamp(
     distortion ?? (style === "HARD" ? 0.62 : 0.36) + (strategy === "AGGRESSIVE" ? 0.08 : 0),
     0.05,
@@ -702,15 +958,19 @@ export async function renderPhonkClip({
   const context = new OfflineAudioContext(2, totalFrames, sampleRate);
 
   const manifest = await getSoundManifest();
+  const melodyBuckets = splitMelodySources(manifest.melodies);
 
-  const [kickPool, snarePool, hatPool, bassPool, melodyPool, fxPool] = await Promise.all([
-    buildPool(context, manifest.kicks, "kicks", style, profile, seededRand, mutation, 6),
-    buildPool(context, manifest.snares, "snares", style, profile, seededRand, mutation, 6),
-    buildPool(context, manifest.hats, "hats", style, profile, seededRand, mutation, 6),
-    buildPool(context, manifest.bass, "bass", style, profile, seededRand, mutation, 4),
-    buildPool(context, manifest.melodies, "melodies", style, profile, seededRand, mutation, 5),
-    buildPool(context, manifest.fx, "fx", style, profile, seededRand, mutation, 4),
-  ]);
+  const [kickPool, snarePool, hatPool, bassPool, cowbellPool, melodyLoopPool, melodyAtmosPool, fxPool] =
+    await Promise.all([
+      buildPool(context, manifest.kicks, "kicks", style, profile, seededRand, mutation, 6),
+      buildPool(context, manifest.snares, "snares", style, profile, seededRand, mutation, 6),
+      buildPool(context, manifest.hats, "hats", style, profile, seededRand, mutation, 6),
+      buildPool(context, manifest.bass, "bass", style, profile, seededRand, mutation, 4),
+      buildPool(context, melodyBuckets.cowbells, "melodies", style, profile, seededRand, mutation, 6),
+      buildPool(context, melodyBuckets.loops, "melodies", style, profile, seededRand, mutation, 3),
+      buildPool(context, melodyBuckets.atmos, "melodies", style, profile, seededRand, mutation, 3),
+      buildPool(context, manifest.fx, "fx", style, profile, seededRand, mutation, 4),
+    ]);
 
   const master = context.createGain();
   master.gain.value = 0.86;
@@ -757,33 +1017,50 @@ export async function renderPhonkClip({
 
   const bass = context.createGain();
   bass.gain.value = (style === "HARD" ? 0.95 + drive * 0.35 : 0.82 + drive * 0.2) * profile.gainSkew.bass;
+  const bassSidechain = context.createGain();
+  bassSidechain.gain.value = 1;
 
   const bassPan = context.createStereoPanner();
   bassPan.pan.value = -profile.stereoBias * 0.18;
 
-  bass.connect(bassPan);
+  bass.connect(bassSidechain);
+  bassSidechain.connect(bassPan);
   bassPan.connect(master);
 
   const texture = context.createGain();
   texture.gain.value =
     (style === "SOFT" ? 0.55 + fxRatio * 0.25 : 0.35 + fxRatio * 0.2) *
     profile.gainSkew.melodies;
+  const textureHighpass = context.createBiquadFilter();
+  textureHighpass.type = "highpass";
+  textureHighpass.frequency.value = style === "HARD" ? 220 : 180;
+  const textureLowpass = context.createBiquadFilter();
+  textureLowpass.type = "lowpass";
+  textureLowpass.frequency.value = style === "HARD" ? 4600 : 5600;
+  const textureSidechain = context.createGain();
+  textureSidechain.gain.value = 1;
 
   const texturePan = context.createStereoPanner();
   texturePan.pan.value = profile.stereoBias;
 
-  texture.connect(texturePan);
+  texture.connect(textureHighpass);
+  textureHighpass.connect(textureLowpass);
+  textureLowpass.connect(textureSidechain);
+  textureSidechain.connect(texturePan);
   texturePan.connect(master);
 
   const baseStep = (60 / grooveBpm) / 2;
   const steps = Math.floor(durationSec / baseStep);
 
   const rootPool = style === "HARD" ? profile.rootPoolHard : profile.rootPoolSoft;
-  const scale = style === "HARD" ? profile.bassScaleHard : profile.bassScaleSoft;
-
   let root = rootPool[Math.floor(seededRand() * rootPool.length)] ?? 40;
+  let leadPhraseIndex = 0;
+  let bassPhraseIndex = 0;
 
   const pickState: Partial<Record<SoundCategory, number>> = {};
+  const leadPickState: Partial<Record<SoundCategory, number>> = {};
+  const loopPickState: Partial<Record<SoundCategory, number>> = {};
+  const atmosPickState: Partial<Record<SoundCategory, number>> = {};
 
   for (let i = 0; i < steps; i += 1) {
     const swingOffset = i % 2 === 1 ? baseStep * profile.swing : 0;
@@ -806,7 +1083,7 @@ export async function renderPhonkClip({
     if (seededRand() < kickProb) {
       const kick = pickBuffer(kickPool, seededRand, "kicks", pickState);
       if (kick) {
-        scheduleBuffer(context, drums, kick, t, {
+        scheduleBuffer(context, drums, kick.buffer, t, {
           gain: (0.74 + drive * 0.34) * profile.gainSkew.kicks,
           playbackRate: clamp(
             (style === "HARD" ? 0.94 + drive * 0.2 : 0.88 + drive * 0.15) *
@@ -822,13 +1099,26 @@ export async function renderPhonkClip({
       } else {
         scheduleFallbackKick(context, drums, t, drive);
       }
+
+      scheduleDuck(
+        bassSidechain.gain,
+        t,
+        style === "HARD" ? 0.46 + drive * 0.08 : 0.34 + drive * 0.06,
+        baseStep * (style === "HARD" ? 0.7 : 0.5),
+      );
+      scheduleDuck(
+        textureSidechain.gain,
+        t,
+        style === "HARD" ? 0.54 : 0.38,
+        baseStep * 0.55,
+      );
     }
 
     const strongBackbeat = barStep === 4 || barStep === 12;
     if (strongBackbeat || seededRand() < snareProb) {
       const snare = pickBuffer(snarePool, seededRand, "snares", pickState);
       if (snare) {
-        scheduleBuffer(context, drums, snare, t, {
+        scheduleBuffer(context, drums, snare.buffer, t, {
           gain: (strongBackbeat ? 0.6 : 0.42) * profile.gainSkew.snares,
           playbackRate: clamp(
             (0.9 + seededRand() * 0.25) * profile.playbackSkew.snares,
@@ -847,7 +1137,7 @@ export async function renderPhonkClip({
     if (seededRand() < hatProb) {
       const hat = pickBuffer(hatPool, seededRand, "hats", pickState);
       if (hat) {
-        scheduleBuffer(context, hatsBus, hat, t, {
+        scheduleBuffer(context, hatsBus, hat.buffer, t, {
           gain: (0.18 + drive * 0.16) * profile.gainSkew.hats,
           playbackRate: clamp(
             (0.96 + seededRand() * 0.24 + mutation * 0.08) * profile.playbackSkew.hats,
@@ -866,7 +1156,7 @@ export async function renderPhonkClip({
         const stutterOffset = baseStep * (0.2 + seededRand() * 0.18);
         if (t + stutterOffset < durationSec) {
           if (hat) {
-            scheduleBuffer(context, hatsBus, hat, t + stutterOffset, {
+            scheduleBuffer(context, hatsBus, hat.buffer, t + stutterOffset, {
               gain: (0.12 + drive * 0.12) * profile.gainSkew.hats,
               playbackRate: clamp(1 + seededRand() * 0.2, 0.75, 1.5),
               attack: 0.001,
@@ -882,12 +1172,15 @@ export async function renderPhonkClip({
 
     const bassTrigger = i % profile.bassCadence === 0 || (mutation > 0.72 && i % 2 === 0 && seededRand() < 0.26);
     if (bassTrigger) {
+      const bassNote = chooseBassMidi(root, bassPhraseIndex, mutation, seededRand);
+      bassPhraseIndex += 1;
       const bassHit = pickBuffer(bassPool, seededRand, "bass", pickState);
       if (bassHit) {
-        scheduleBuffer(context, bass, bassHit, t, {
+        scheduleBuffer(context, bass, bassHit.buffer, t, {
           gain: (style === "HARD" ? 0.55 + drive * 0.28 : 0.48 + drive * 0.22) * profile.gainSkew.bass,
           playbackRate: clamp(
-            (style === "HARD" ? 0.84 + drive * 0.3 : 0.74 + drive * 0.23) *
+            playbackRateForMidi(bassHit.rootMidi, bassNote) *
+              (style === "HARD" ? 0.96 + drive * 0.08 : 0.94 + drive * 0.06) *
               profile.playbackSkew.bass *
               (1 + (seededRand() - 0.5) * 0.06),
             0.5,
@@ -898,8 +1191,7 @@ export async function renderPhonkClip({
           maxDuration: baseStep * 2.2,
         });
       } else {
-        const note = root + (scale[Math.floor(seededRand() * scale.length)] ?? 0);
-        scheduleFallbackBass(context, bass, t, midiToHz(note), baseStep * 1.8, style);
+        scheduleFallbackBass(context, bass, t, midiToHz(bassNote), baseStep * 1.8, style);
       }
 
       if (seededRand() < 0.15 + mutation * 0.24 + (lobbyId === "chaos-lab" ? 0.12 : 0)) {
@@ -910,19 +1202,58 @@ export async function renderPhonkClip({
 
     const melodyTrigger = i % profile.melodyCadence === 0 && seededRand() < clamp(0.2 + fxRatio * 0.35 + mutation * 0.2, 0.05, 0.95);
     if (melodyTrigger) {
-      const melodic = pickBuffer(melodyPool, seededRand, "melodies", pickState);
+      const leadNote = chooseLeadMidi(root + 12, style, strategy, leadPhraseIndex, mutation, seededRand);
+      leadPhraseIndex += 1;
+      const melodic = pickBuffer(cowbellPool, seededRand, "melodies", leadPickState);
       if (melodic) {
-        scheduleBuffer(context, texture, melodic, t + seededRand() * 0.03, {
-          gain: (style === "SOFT" ? 0.38 + fxRatio * 0.2 : 0.24 + fxRatio * 0.16) * profile.gainSkew.melodies,
+        scheduleBuffer(context, texture, melodic.buffer, t + seededRand() * 0.02, {
+          gain: (style === "SOFT" ? 0.34 + fxRatio * 0.16 : 0.28 + fxRatio * 0.14) * profile.gainSkew.melodies,
           playbackRate: clamp(
-            (style === "SOFT" ? 0.88 + seededRand() * 0.2 : 0.98 + seededRand() * 0.18) *
+            playbackRateForMidi(melodic.rootMidi, leadNote) *
+              (style === "SOFT" ? 0.98 + seededRand() * 0.08 : 1 + seededRand() * 0.06) *
               profile.playbackSkew.melodies,
             0.55,
             1.6,
           ),
-          attack: 0.004,
-          release: baseStep * (4.8 + seededRand() * 1.2),
-          maxDuration: baseStep * 7,
+          attack: 0.002,
+          release: baseStep * (style === "HARD" ? 1.35 : 1.7),
+          maxDuration: baseStep * 2.2,
+        });
+
+        if (style === "HARD" && seededRand() < 0.34 + mutation * 0.14) {
+          scheduleBuffer(context, texture, melodic.buffer, t + baseStep * 0.48, {
+            gain: (0.16 + fxRatio * 0.08) * profile.gainSkew.melodies,
+            playbackRate: clamp(
+              playbackRateForMidi(melodic.rootMidi, clampMidi(leadNote - 12)) * (1 + seededRand() * 0.04),
+              0.55,
+              1.6,
+            ),
+            attack: 0.001,
+            release: baseStep * 1.05,
+            maxDuration: baseStep * 1.5,
+          });
+        }
+      }
+
+      const melodicLoop = pickBuffer(melodyLoopPool, seededRand, "melodies", loopPickState);
+      if (melodicLoop && seededRand() < (style === "SOFT" ? 0.36 : 0.22) + fxRatio * 0.12) {
+        scheduleBuffer(context, texture, melodicLoop.buffer, t + seededRand() * 0.04, {
+          gain: (style === "SOFT" ? 0.18 + fxRatio * 0.12 : 0.12 + fxRatio * 0.08) * profile.gainSkew.melodies,
+          playbackRate: clamp((0.92 + seededRand() * 0.12) * profile.playbackSkew.melodies, 0.7, 1.3),
+          attack: 0.01,
+          release: baseStep * (5.6 + seededRand() * 1.4),
+          maxDuration: baseStep * 8,
+        });
+      }
+
+      const atmospheric = pickBuffer(melodyAtmosPool, seededRand, "melodies", atmosPickState);
+      if (atmospheric && seededRand() < (style === "SOFT" ? 0.3 : 0.16) + fxRatio * 0.1) {
+        scheduleBuffer(context, texture, atmospheric.buffer, t + seededRand() * 0.05, {
+          gain: (0.12 + fxRatio * 0.1) * profile.gainSkew.melodies,
+          playbackRate: clamp((0.86 + seededRand() * 0.18) * profile.playbackSkew.melodies, 0.65, 1.35),
+          attack: 0.02,
+          release: baseStep * (6.2 + seededRand() * 1.6),
+          maxDuration: baseStep * 9,
         });
       }
     }
@@ -931,7 +1262,7 @@ export async function renderPhonkClip({
     if (fxTrigger) {
       const fx = pickBuffer(fxPool, seededRand, "fx", pickState);
       if (fx) {
-        scheduleBuffer(context, texture, fx, t + seededRand() * 0.05, {
+        scheduleBuffer(context, texture, fx.buffer, t + seededRand() * 0.05, {
           gain: (0.18 + fxRatio * 0.22) * profile.gainSkew.fx,
           playbackRate: clamp((0.86 + seededRand() * 0.26) * profile.playbackSkew.fx, 0.5, 1.8),
           attack: 0.01,
@@ -942,9 +1273,9 @@ export async function renderPhonkClip({
     }
 
     if (lobbyId === "chaos-lab" && seededRand() < 0.03 + mutation * 0.08) {
-      const chaosHit = pickBuffer(melodyPool, seededRand, "melodies", pickState);
+      const chaosHit = pickBuffer(cowbellPool, seededRand, "melodies", leadPickState);
       if (chaosHit) {
-        scheduleBuffer(context, texture, chaosHit, t + baseStep * 0.12, {
+        scheduleBuffer(context, texture, chaosHit.buffer, t + baseStep * 0.12, {
           gain: (0.15 + mutation * 0.2) * profile.gainSkew.melodies,
           playbackRate: clamp(1.05 + seededRand() * 0.35, 0.6, 1.7),
           attack: 0.001,
