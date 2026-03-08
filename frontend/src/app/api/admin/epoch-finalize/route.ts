@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       ...result,
     });
   } catch (error) {
+    console.error("Arena epoch-finalize sync failed", error);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Arena epoch-finalize sync failed",

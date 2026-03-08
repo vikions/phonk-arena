@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       ...result,
     });
   } catch (error) {
+    console.error("Arena epoch-start sync failed", error);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Arena epoch-start sync failed",
