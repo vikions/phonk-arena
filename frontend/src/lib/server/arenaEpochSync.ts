@@ -14,6 +14,25 @@ import { getAgentTokenPicksForEpoch, getLiveArenaTokenMetrics } from "@/lib/serv
 
 const AGENT_IDS = [0, 1, 2, 3] as const;
 
+function includesErrorName(error: unknown, errorName: string): boolean {
+  if (!error) {
+    return false;
+  }
+
+  const direct = error as { name?: string; shortMessage?: string; message?: string; cause?: unknown; data?: { errorName?: string } };
+  if (direct.name === errorName || direct.data?.errorName === errorName) {
+    return true;
+  }
+
+  const shortMessage = typeof direct.shortMessage === "string" ? direct.shortMessage : "";
+  const message = typeof direct.message === "string" ? direct.message : "";
+  if (shortMessage.includes(errorName) || message.includes(errorName)) {
+    return true;
+  }
+
+  return direct.cause ? includesErrorName(direct.cause, errorName) : false;
+}
+
 function toE8(value: number): bigint {
   if (!Number.isFinite(value) || value <= 0) {
     return 0n;
@@ -68,25 +87,39 @@ export async function syncCurrentArenaEpochStart() {
       throw new Error(`Missing priceUsd for agent ${agentId} token ${pick.symbol}.`);
     }
 
-    const txHash = await recordArenaTokenSelection(walletClient, {
-      epochId: currentEpochId,
-      agentId,
-      tokenAddress: pick.address,
-      tokenSymbol: pick.symbol,
-      startPriceUsdE8: toE8(pick.priceUsd),
-      startVolume24h: toUint(pick.volume24h),
-      startHolderCount: toUint(pick.holderCount),
-      startLiquidityUsd: toUint(pick.liquidityUsd),
-      startTxCount24h: toUint(pick.txCount24h),
-    });
+    try {
+      const txHash = await recordArenaTokenSelection(walletClient, {
+        epochId: currentEpochId,
+        agentId,
+        tokenAddress: pick.address,
+        tokenSymbol: pick.symbol,
+        startPriceUsdE8: toE8(pick.priceUsd),
+        startVolume24h: toUint(pick.volume24h),
+        startHolderCount: toUint(pick.holderCount),
+        startLiquidityUsd: toUint(pick.liquidityUsd),
+        startTxCount24h: toUint(pick.txCount24h),
+      });
 
-    actions.push({
-      agentId,
-      action: "recorded",
-      tokenSymbol: pick.symbol,
-      tokenAddress: pick.address,
-      txHash,
-    });
+      actions.push({
+        agentId,
+        action: "recorded",
+        tokenSymbol: pick.symbol,
+        tokenAddress: pick.address,
+        txHash,
+      });
+    } catch (error) {
+      if (includesErrorName(error, "SelectionAlreadyRecorded")) {
+        actions.push({
+          agentId,
+          action: "skipped",
+          tokenSymbol: pick.symbol,
+          tokenAddress: pick.address,
+        });
+        continue;
+      }
+
+      throw error;
+    }
   }
 
   return {
@@ -182,7 +215,22 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
     finalHolderCount,
     finalLiquidityUsd,
     finalTxCount24h,
+  }).catch((error) => {
+    if (includesErrorName(error, "EpochAlreadyFinalized")) {
+      return null;
+    }
+
+    throw error;
   });
+
+  if (txHash === null) {
+    return {
+      epochId: Number(targetEpochId),
+      action: "skipped",
+      reason: "already_finalized",
+      winnerAgentId: existingResult?.winnerAgentId ?? null,
+    };
+  }
 
   return {
     epochId: Number(targetEpochId),

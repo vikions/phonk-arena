@@ -46,6 +46,30 @@ function toSafeNumber(value: unknown): number {
   return 0;
 }
 
+function toBigIntValue(value: unknown): bigint {
+  if (typeof value === "bigint") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return BigInt(Math.trunc(value));
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    try {
+      return BigInt(value);
+    } catch {
+      return 0n;
+    }
+  }
+
+  if (typeof value === "boolean") {
+    return value ? 1n : 0n;
+  }
+
+  return 0n;
+}
+
 const parsedAbi = (phonkArenaSidecarAbiJson as { abi?: Abi }).abi;
 
 export const arenaSidecarAbi = (Array.isArray(parsedAbi) ? parsedAbi : []) as Abi;
@@ -85,6 +109,10 @@ export interface ArenaSidecarEpochPoolView {
   totalPool: bigint;
 }
 
+function isRecordLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function normalizeTokenSelection(value: unknown): ArenaSidecarTokenSelectionView | null {
   if (Array.isArray(value) && value.length >= 9) {
     return {
@@ -100,6 +128,20 @@ function normalizeTokenSelection(value: unknown): ArenaSidecarTokenSelectionView
     };
   }
 
+  if (isRecordLike(value)) {
+    return {
+      tokenAddress: (normalizeAddress(String(value.tokenAddress ?? "")) ?? ZERO_ADDRESS) as Address,
+      tokenSymbol: String(value.tokenSymbol ?? ""),
+      startPriceUsdE8: toBigIntValue(value.startPriceUsdE8),
+      startVolume24h: toBigIntValue(value.startVolume24h),
+      startHolderCount: toBigIntValue(value.startHolderCount),
+      startLiquidityUsd: toBigIntValue(value.startLiquidityUsd),
+      startTxCount24h: toBigIntValue(value.startTxCount24h),
+      timestamp: toSafeNumber(value.timestamp),
+      recorded: Boolean(value.recorded),
+    };
+  }
+
   return null;
 }
 
@@ -110,6 +152,15 @@ function normalizeUserBet(value: unknown): ArenaSidecarUserBetView | null {
       amount: BigInt(value[1] ?? 0),
       claimed: Boolean(value[2]),
       exists: Boolean(value[3]),
+    };
+  }
+
+  if (isRecordLike(value)) {
+    return {
+      agentId: toSafeNumber(value.agentId),
+      amount: toBigIntValue(value.amount),
+      claimed: Boolean(value.claimed),
+      exists: Boolean(value.exists),
     };
   }
 
@@ -132,6 +183,21 @@ function normalizeEpochResult(value: unknown): ArenaSidecarEpochResultView | nul
     };
   }
 
+  if (isRecordLike(value)) {
+    const rawScores = Array.isArray(value.scores) ? value.scores : [];
+    return {
+      finalized: Boolean(value.finalized),
+      winnerAgentId: toSafeNumber(value.winnerAgentId),
+      scores: [
+        toBigIntValue(rawScores[0]),
+        toBigIntValue(rawScores[1]),
+        toBigIntValue(rawScores[2]),
+        toBigIntValue(rawScores[3]),
+      ],
+      totalPool: toBigIntValue(value.totalPool),
+    };
+  }
+
   return null;
 }
 
@@ -146,6 +212,19 @@ function normalizeEpochPool(value: unknown): ArenaSidecarEpochPoolView | null {
         BigInt(rawPools[3] ?? 0),
       ],
       totalPool: BigInt(value[1] ?? 0),
+    };
+  }
+
+  if (isRecordLike(value)) {
+    const rawPools = Array.isArray(value.pools) ? value.pools : [];
+    return {
+      pools: [
+        toBigIntValue(rawPools[0]),
+        toBigIntValue(rawPools[1]),
+        toBigIntValue(rawPools[2]),
+        toBigIntValue(rawPools[3]),
+      ],
+      totalPool: toBigIntValue(value.totalPool),
     };
   }
 
