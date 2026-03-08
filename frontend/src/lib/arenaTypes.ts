@@ -108,6 +108,6 @@ export interface ArenaBattleSnapshot {
   leaderboard: ArenaAgentId[];
   clipHistory: ArenaClipHistoryItem[];
   currentEpoch: ArenaEpochSnapshot;
-  bettingMode: "awaiting_arena_abi";
+  bettingMode: "awaiting_arena_abi" | "arena_sidecar_live";
   lastUpdatedAt: number;
 }

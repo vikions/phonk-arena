@@ -1,17 +1,22 @@
 import { NextResponse } from "next/server";
 
-import { getDailyAgentTokenPicks, getDiscoveryDailySeed } from "@/lib/server/tokenDiscovery";
+import { getArenaSidecarCurrentEpochId } from "@/lib/arenaSidecar";
+import { getAgentTokenPicksForEpoch, getDiscoveryDailySeed } from "@/lib/server/tokenDiscovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const picks = await getDailyAgentTokenPicks();
+    const currentEpochId = await getArenaSidecarCurrentEpochId();
+    const fallbackEpochId = getDiscoveryDailySeed();
+    const epochId = Number(currentEpochId ?? BigInt(fallbackEpochId));
+    const picks = await getAgentTokenPicksForEpoch(currentEpochId ?? BigInt(fallbackEpochId));
 
     return NextResponse.json({
       generatedAt: new Date().toISOString(),
-      dailySeed: getDiscoveryDailySeed(),
+      epochId,
+      dailySeed: epochId,
       picks: Object.values(picks),
     });
   } catch (error) {

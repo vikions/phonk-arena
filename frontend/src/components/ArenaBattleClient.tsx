@@ -109,10 +109,11 @@ function AgentNode({
 
   return (
     <article
-      className={`relative overflow-hidden rounded-[1.8rem] border bg-[linear-gradient(180deg,rgba(7,10,18,0.95),rgba(5,7,14,0.98))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.45)] ${borderClass(agent.agentId)} ${isActive ? "ring-1 ring-white/20" : ""}`}
+      className={`relative overflow-hidden rounded-[1.8rem] border bg-[linear-gradient(180deg,rgba(7,10,18,0.95),rgba(5,7,14,0.98))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.45)] transition duration-300 ${borderClass(agent.agentId)} ${isActive ? "z-10 scale-[1.035] ring-2 ring-white/35" : "scale-[0.965] opacity-55"}`}
       style={{
+        filter: isActive ? "saturate(1.22) brightness(1.15)" : "saturate(0.52) brightness(0.62)",
         boxShadow: isActive
-          ? `0 18px 55px rgba(0,0,0,0.46), 0 0 0 1px rgba(255,255,255,0.05), 0 0 48px ${agent.aura}`
+          ? `0 24px 70px rgba(0,0,0,0.52), 0 0 0 1px rgba(255,255,255,0.08), 0 0 84px ${agent.aura}`
           : `0 16px 46px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04)`,
       }}
     >
@@ -121,7 +122,7 @@ function AgentNode({
           src={agent.image}
           alt={agent.name}
           fill
-          className="scale-[1.08] object-cover object-center opacity-15 blur-2xl"
+          className={`scale-[1.08] object-cover object-center ${isActive ? "opacity-28 blur-xl" : "opacity-10 blur-2xl"}`}
         />
         <div
           className="absolute inset-0"
@@ -129,11 +130,17 @@ function AgentNode({
             background: `linear-gradient(180deg, rgba(6,8,16,0.18) 0%, rgba(5,7,14,0.5) 48%, rgba(5,7,14,0.96) 100%), radial-gradient(circle at top, ${agent.aura}, transparent 44%)`,
           }}
         />
+        {!isActive ? <div className="absolute inset-0 bg-black/32" /> : null}
       </div>
 
       <div className="relative flex gap-4">
         <div className="relative h-28 w-24 shrink-0 overflow-hidden rounded-[1.2rem] border border-white/10 bg-black/25">
-          <Image src={agent.image} alt={agent.name} fill className="object-cover object-top" />
+          <Image
+            src={agent.image}
+            alt={agent.name}
+            fill
+            className={`object-cover object-top transition duration-300 ${isActive ? "scale-[1.03] opacity-100 saturate-125" : "opacity-78 saturate-[0.7]"}`}
+          />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -149,7 +156,7 @@ function AgentNode({
                 </span>
               ) : null}
               {isActive ? (
-                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
+                <span className="rounded-full border border-cyan-200/40 bg-cyan-300/16 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.28)]">
                   Live Now
                 </span>
               ) : null}
@@ -233,6 +240,8 @@ export function ArenaBattleClient() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const lastPlayedClipIdRef = useRef<string>("");
   const clipBufferCacheRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const currentGainRef = useRef<GainNode | null>(null);
 
   const resolvedChainId = walletChainId ?? chainId;
   const wrongChain = isConnected && resolvedChainId !== INK_MAINNET_CHAIN_ID;
@@ -477,15 +486,6 @@ export function ArenaBattleClient() {
   }, [isConnected, walletClient]);
 
   useEffect(() => {
-    return () => {
-      if (audioCtxRef.current) {
-        void audioCtxRef.current.close();
-        audioCtxRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (!betConfirmed) {
       return;
     }
@@ -564,6 +564,38 @@ export function ArenaBattleClient() {
     return promise;
   }, []);
 
+  const stopCurrentClip = useCallback((resetClipId = false) => {
+    const currentSource = currentSourceRef.current;
+    if (currentSource) {
+      currentSource.onended = null;
+      try {
+        currentSource.stop();
+      } catch {
+        // Source may already be stopped.
+      }
+      try {
+        currentSource.disconnect();
+      } catch {
+        // Ignore disconnect errors on released nodes.
+      }
+      currentSourceRef.current = null;
+    }
+
+    const currentGain = currentGainRef.current;
+    if (currentGain) {
+      try {
+        currentGain.disconnect();
+      } catch {
+        // Ignore disconnect errors on released nodes.
+      }
+      currentGainRef.current = null;
+    }
+
+    if (resetClipId) {
+      lastPlayedClipIdRef.current = "";
+    }
+  }, []);
+
   const enableAudio = useCallback(async () => {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioContext();
@@ -572,6 +604,16 @@ export function ArenaBattleClient() {
     await audioCtxRef.current.resume();
     setAudioEnabled(true);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      stopCurrentClip(true);
+      if (audioCtxRef.current) {
+        void audioCtxRef.current.close();
+        audioCtxRef.current = null;
+      }
+    };
+  }, [stopCurrentClip]);
 
   useEffect(() => {
     if (audioEnabled) {
@@ -592,6 +634,7 @@ export function ArenaBattleClient() {
 
   useEffect(() => {
     if (!audioEnabled || !snapshot?.nowPlaying) {
+      stopCurrentClip(true);
       return;
     }
 
@@ -619,6 +662,8 @@ export function ArenaBattleClient() {
           await context.resume();
         }
 
+        stopCurrentClip(false);
+
         const source = context.createBufferSource();
         const gain = context.createGain();
         gain.gain.value = 0.95;
@@ -626,7 +671,23 @@ export function ArenaBattleClient() {
         source.buffer = buffer;
         source.connect(gain);
         gain.connect(context.destination);
+        source.onended = () => {
+          if (currentSourceRef.current === source) {
+            currentSourceRef.current = null;
+          }
+          if (currentGainRef.current === gain) {
+            try {
+              gain.disconnect();
+            } catch {
+              // Ignore disconnect errors on released nodes.
+            }
+            currentGainRef.current = null;
+          }
+        };
+        currentSourceRef.current = source;
+        currentGainRef.current = gain;
         source.start();
+        source.stop(context.currentTime + clip.durationMs / 1000);
         lastPlayedClipIdRef.current = clip.clipId;
       } catch {
         setUiMessage("Arena clip could not render. Check sample packs in /public/sounds.");
@@ -638,7 +699,7 @@ export function ArenaBattleClient() {
     return () => {
       cancelled = true;
     };
-  }, [audioEnabled, ensureClipBuffer, snapshot]);
+  }, [audioEnabled, ensureClipBuffer, snapshot, stopCurrentClip]);
 
   const leaderboardAgents = useMemo(() => {
     if (!snapshot) {

@@ -175,6 +175,227 @@ export async function getArenaSidecarTokenSelection(
   }
 }
 
+export async function getArenaSidecarCurrentEpochId(publicClient?: PublicClient): Promise<bigint | null> {
+  if (!isArenaSidecarConfigured) {
+    return null;
+  }
+
+  try {
+    const result = await getReadonlyClient(publicClient).readContract({
+      address: arenaSidecarAddress,
+      abi: arenaSidecarAbi,
+      functionName: "currentEpochId",
+      args: [],
+    });
+
+    return typeof result === "bigint" ? result : BigInt(result as number);
+  } catch {
+    return null;
+  }
+}
+
+export async function getArenaSidecarEpochEnd(
+  epochId: bigint | number,
+  publicClient?: PublicClient,
+): Promise<bigint | null> {
+  if (!isArenaSidecarConfigured) {
+    return null;
+  }
+
+  try {
+    const result = await getReadonlyClient(publicClient).readContract({
+      address: arenaSidecarAddress,
+      abi: arenaSidecarAbi,
+      functionName: "epochEnd",
+      args: [BigInt(epochId)],
+    });
+
+    return typeof result === "bigint" ? result : BigInt(result as number);
+  } catch {
+    return null;
+  }
+}
+
+export async function getArenaSidecarEpochStart(
+  epochId: bigint | number,
+  publicClient?: PublicClient,
+): Promise<bigint | null> {
+  if (!isArenaSidecarConfigured) {
+    return null;
+  }
+
+  try {
+    const result = await getReadonlyClient(publicClient).readContract({
+      address: arenaSidecarAddress,
+      abi: arenaSidecarAbi,
+      functionName: "epochStart",
+      args: [BigInt(epochId)],
+    });
+
+    return typeof result === "bigint" ? result : BigInt(result as number);
+  } catch {
+    return null;
+  }
+}
+
+export async function isArenaSidecarEpochOpen(
+  epochId: bigint | number,
+  publicClient?: PublicClient,
+): Promise<boolean | null> {
+  if (!isArenaSidecarConfigured) {
+    return null;
+  }
+
+  try {
+    const result = await getReadonlyClient(publicClient).readContract({
+      address: arenaSidecarAddress,
+      abi: arenaSidecarAbi,
+      functionName: "isEpochOpen",
+      args: [BigInt(epochId)],
+    });
+
+    return Boolean(result);
+  } catch {
+    return null;
+  }
+}
+
+export async function getArenaSidecarEpochResult(
+  epochId: bigint | number,
+  publicClient?: PublicClient,
+): Promise<ArenaSidecarEpochResultView | null> {
+  if (!isArenaSidecarConfigured) {
+    return null;
+  }
+
+  try {
+    const result = await getReadonlyClient(publicClient).readContract({
+      address: arenaSidecarAddress,
+      abi: arenaSidecarAbi,
+      functionName: "getEpochResult",
+      args: [BigInt(epochId)],
+    });
+
+    return normalizeEpochResult(result);
+  } catch {
+    return null;
+  }
+}
+
+export async function getArenaSidecarEpochPool(
+  epochId: bigint | number,
+  publicClient?: PublicClient,
+): Promise<ArenaSidecarEpochPoolView | null> {
+  if (!isArenaSidecarConfigured) {
+    return null;
+  }
+
+  try {
+    const result = await getReadonlyClient(publicClient).readContract({
+      address: arenaSidecarAddress,
+      abi: arenaSidecarAbi,
+      functionName: "getEpochPool",
+      args: [BigInt(epochId)],
+    });
+
+    return normalizeEpochPool(result);
+  } catch {
+    return null;
+  }
+}
+
+export async function getArenaSidecarUserBet(
+  epochId: bigint | number,
+  user: Address | string,
+  publicClient?: PublicClient,
+): Promise<ArenaSidecarUserBetView | null> {
+  if (!isArenaSidecarConfigured) {
+    return null;
+  }
+
+  const normalizedUser = normalizeAddress(String(user));
+  if (!normalizedUser) {
+    return null;
+  }
+
+  try {
+    const result = await getReadonlyClient(publicClient).readContract({
+      address: arenaSidecarAddress,
+      abi: arenaSidecarAbi,
+      functionName: "getUserBet",
+      args: [BigInt(epochId), normalizedUser],
+    });
+
+    return normalizeUserBet(result);
+  } catch {
+    return null;
+  }
+}
+
+export interface ArenaRecordTokenSelectionInput {
+  epochId: bigint | number;
+  agentId: number;
+  tokenAddress: string;
+  tokenSymbol: string;
+  startPriceUsdE8: bigint | number;
+  startVolume24h: bigint | number;
+  startHolderCount: bigint | number;
+  startLiquidityUsd: bigint | number;
+  startTxCount24h: bigint | number;
+}
+
+export interface ArenaFinalizeEpochInput {
+  epochId: bigint | number;
+  finalPriceUsdE8: [bigint, bigint, bigint, bigint];
+  finalVolume24h: [bigint, bigint, bigint, bigint];
+  finalHolderCount: [bigint, bigint, bigint, bigint];
+  finalLiquidityUsd: [bigint, bigint, bigint, bigint];
+  finalTxCount24h: [bigint, bigint, bigint, bigint];
+}
+
+export async function recordArenaTokenSelection(
+  walletClient: WalletClient,
+  input: ArenaRecordTokenSelectionInput,
+): Promise<`0x${string}`> {
+  const tokenAddress = (normalizeAddress(input.tokenAddress) ?? ZERO_ADDRESS) as Address;
+
+  return (walletClient as unknown as { writeContract: (config: unknown) => Promise<`0x${string}`> }).writeContract({
+    address: arenaSidecarAddress,
+    abi: arenaSidecarAbi,
+    functionName: "recordTokenSelection",
+    args: [
+      BigInt(input.epochId),
+      BigInt(input.agentId),
+      tokenAddress,
+      input.tokenSymbol,
+      BigInt(input.startPriceUsdE8),
+      BigInt(input.startVolume24h),
+      BigInt(input.startHolderCount),
+      BigInt(input.startLiquidityUsd),
+      BigInt(input.startTxCount24h),
+    ],
+  });
+}
+
+export async function finalizeArenaEpoch(
+  walletClient: WalletClient,
+  input: ArenaFinalizeEpochInput,
+): Promise<`0x${string}`> {
+  return (walletClient as unknown as { writeContract: (config: unknown) => Promise<`0x${string}`> }).writeContract({
+    address: arenaSidecarAddress,
+    abi: arenaSidecarAbi,
+    functionName: "finalizeEpoch",
+    args: [
+      BigInt(input.epochId),
+      input.finalPriceUsdE8,
+      input.finalVolume24h,
+      input.finalHolderCount,
+      input.finalLiquidityUsd,
+      input.finalTxCount24h,
+    ],
+  });
+}
+
 export async function placeArenaBet(
   walletClient: WalletClient,
   epochId: bigint | number,

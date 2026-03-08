@@ -1,6 +1,7 @@
 import "server-only";
 
-import { getAgentDNA, getCurrentEpochId } from "@/lib/contract";
+import { getAgentDNA } from "@/lib/contract";
+import { getArenaSidecarCurrentEpochId, getArenaSidecarEpochEnd, getArenaSidecarEpochStart, isArenaSidecarConfigured } from "@/lib/arenaSidecar";
 import type {
   ArenaAgentDnaSnapshot,
   ArenaAgentId,
@@ -12,7 +13,7 @@ import type {
   ArenaScoreBreakdown,
 } from "@/lib/arenaTypes";
 import { DEFAULT_DNA } from "@/lib/musicEngine";
-import { getDailyAgentTokenPicks, getLiveDailyAgentTokenPicks } from "@/lib/server/tokenDiscovery";
+import { getAgentTokenPicksForEpoch, getLiveAgentTokenPicksForEpoch } from "@/lib/server/tokenDiscovery";
 import type { DiscoveredInkToken } from "@/lib/tokenDiscovery";
 import type { AgentId, AgentStrategy, AgentStyle, LobbyId } from "@/lib/types";
 
@@ -23,7 +24,7 @@ const LISTENER_TTL_MS = 30_000;
 const HISTORY_LIMIT = 12;
 const FEED_CACHE_TTL_MS = 20_000;
 const ARENA_ID = "ink-phonk-arena";
-const EPOCH_MS = 3_600_000;
+const EPOCH_MS = 86_400_000;
 const AGENT_ORDER: ArenaAgentId[] = [0, 1, 2, 3];
 
 interface ArenaAgentMeta {
@@ -73,6 +74,7 @@ interface CachedArenaAgentFeed {
 }
 
 interface ArenaDataCache {
+  epochId: number;
   fetchedAt: number;
   agents: CachedArenaAgentFeed[];
 }
@@ -279,14 +281,22 @@ function buildScoreBreakdown(tokens: DiscoveredInkToken[], token: DiscoveredInkT
   };
 }
 
-async function getArenaFeed(now: number, state: ArenaRuntimeState): Promise<CachedArenaAgentFeed[]> {
-  if (state.dataCache && now - state.dataCache.fetchedAt < FEED_CACHE_TTL_MS) {
+async function getArenaFeed(
+  epochId: bigint,
+  now: number,
+  state: ArenaRuntimeState,
+): Promise<CachedArenaAgentFeed[]> {
+  if (
+    state.dataCache &&
+    state.dataCache.epochId === Number(epochId) &&
+    now - state.dataCache.fetchedAt < FEED_CACHE_TTL_MS
+  ) {
     return state.dataCache.agents;
   }
 
   const [selectedPicks, livePicks] = await Promise.all([
-    getDailyAgentTokenPicks(now),
-    getLiveDailyAgentTokenPicks(now).catch(() => null),
+    getAgentTokenPicksForEpoch(epochId, now),
+    getLiveAgentTokenPicksForEpoch(epochId, now).catch(() => null),
   ]);
 
   const liveTokens = AGENT_META.map((agent) => livePicks?.[agent.agentId]?.token ?? selectedPicks[agent.agentId].token);
@@ -331,6 +341,7 @@ async function getArenaFeed(now: number, state: ArenaRuntimeState): Promise<Cach
   });
 
   state.dataCache = {
+    epochId: Number(epochId),
     fetchedAt: now,
     agents,
   };
@@ -609,11 +620,17 @@ function buildNowPlaying(state: ArenaRuntimeState, now: number, agents: ArenaBat
   };
 }
 
-function buildSnapshot(state: ArenaRuntimeState, now: number, agents: ArenaBattleAgentSnapshot[]): ArenaBattleSnapshot {
+function buildSnapshot(
+  state: ArenaRuntimeState,
+  now: number,
+  agents: ArenaBattleAgentSnapshot[],
+  epochId: number,
+  epochStartMs: number,
+  epochEndMs: number,
+): ArenaBattleSnapshot {
   const listeners = Object.keys(state.listeners).length;
   const leaderboard = getLeaderboard(agents);
   const leaderAgentId = leaderboard[0] ?? null;
-  const currentEpochId = Number(getCurrentEpochId(now));
 
   return {
     arenaId: ARENA_ID,
@@ -629,14 +646,14 @@ function buildSnapshot(state: ArenaRuntimeState, now: number, agents: ArenaBattl
     leaderboard,
     clipHistory: [...state.clipHistory],
     currentEpoch: {
-      epochId: currentEpochId,
-      startedAt: currentEpochId * EPOCH_MS,
-      endsAt: (currentEpochId + 1) * EPOCH_MS,
+      epochId,
+      startedAt: epochStartMs,
+      endsAt: epochEndMs,
       scoringRule: "Price Surge 55% + Volume 25% + Flow 10% + Liquidity 5% + Holder Flow 5%",
       leaderAgentId,
       projectedWinnerAgentId: leaderAgentId,
     },
-    bettingMode: "awaiting_arena_abi",
+    bettingMode: isArenaSidecarConfigured ? "arena_sidecar_live" : "awaiting_arena_abi",
     lastUpdatedAt: now,
   };
 }
@@ -645,8 +662,16 @@ async function syncArena(now: number): Promise<ArenaBattleSnapshot> {
   const state = getArenaState();
   const staleChanged = pruneStaleListeners(state, now);
   const loopChanged = applyListenerDrivenLoop(state, now);
+  const currentEpochId = await getArenaSidecarCurrentEpochId();
+  const resolvedEpochId = Number(currentEpochId ?? BigInt(Math.floor(now / EPOCH_MS)));
+  const [epochStart, epochEnd] = await Promise.all([
+    getArenaSidecarEpochStart(BigInt(resolvedEpochId)),
+    getArenaSidecarEpochEnd(BigInt(resolvedEpochId)),
+  ]);
+  const resolvedEpochEndMs = Number(epochEnd ?? BigInt((resolvedEpochId + 1) * 86_400)) * 1000;
+  const resolvedEpochStartMs = Number(epochStart) > 0 ? Number(epochStart) * 1000 : resolvedEpochEndMs - EPOCH_MS;
 
-  const feed = await getArenaFeed(now, state);
+  const feed = await getArenaFeed(BigInt(resolvedEpochId), now, state);
   let agents = buildArenaAgents(state, feed);
   const simChanged = syncClipSimulation(state, now, agents);
 
@@ -654,7 +679,7 @@ async function syncArena(now: number): Promise<ArenaBattleSnapshot> {
     agents = buildArenaAgents(state, feed);
   }
 
-  const snapshot = buildSnapshot(state, now, agents);
+  const snapshot = buildSnapshot(state, now, agents, resolvedEpochId, resolvedEpochStartMs, resolvedEpochEndMs);
 
   if (staleChanged || loopChanged || simChanged) {
     global.__PHONK_ARENA_RUNTIME__ = state;

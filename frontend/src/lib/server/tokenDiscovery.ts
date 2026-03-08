@@ -35,6 +35,7 @@ interface DexPair {
   pairAddress?: string;
   url?: string;
   pairCreatedAt?: number;
+  priceUsd?: string | number;
   baseToken?: DexTokenRef;
   quoteToken?: DexTokenRef;
   liquidity?: {
@@ -120,12 +121,7 @@ const STRATEGY_NAMES: Record<AgentId, AgentTokenPick["strategy"]> = {
   3: "GLITCH",
 };
 
-let cachedDailyPickState:
-  | {
-      dailySeed: number;
-      promise: Promise<TokenPickMap>;
-    }
-  | null = null;
+const cachedEpochPickStates = new Map<number, Promise<TokenPickMap>>();
 
 function toNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -168,7 +164,15 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-function getDailySeed(nowMs = Date.now()): number {
+function getEpochSeed(epochId: bigint | number): number {
+  if (typeof epochId === "bigint") {
+    return Number(epochId);
+  }
+
+  return Math.max(0, Math.trunc(epochId));
+}
+
+function getFallbackEpochSeed(nowMs = Date.now()): number {
   return Math.floor(nowMs / 86_400_000);
 }
 
@@ -385,6 +389,16 @@ async function fetchDexPairsByAddress(addresses: string[]): Promise<Map<string, 
   return pairByAddress;
 }
 
+export interface LiveArenaTokenMetrics {
+  address: string;
+  symbol: string;
+  priceUsd: number;
+  volume24h: number;
+  holderCount: number;
+  liquidityUsd: number;
+  txCount24h: number;
+}
+
 function getTrendingScore(token: RankedInkyToken): number {
   if (token.trendingRank === null) {
     return 0;
@@ -438,12 +452,14 @@ function buildCandidates(
       const dexTxCount = toNumber(pair?.txns?.h24?.buys) + toNumber(pair?.txns?.h24?.sells);
       const dexVolume24h = toNumber(pair?.volume?.h24);
       const dexPriceChange24h = toNumber(pair?.priceChange?.h24);
+      const dexPriceUsd = toNumber(pair?.priceUsd);
       const marketCap = toNumber(pair?.marketCap) || toNumber(pair?.fdv) || token.circulatingMarketCap;
 
       return {
         address: token.address,
         symbol: token.symbol,
         name: token.name,
+        priceUsd: dexPriceUsd,
         priceChange24h: dexPriceChange24h || token.priceChange24h,
         volume24h: dexVolume24h || token.volume24h,
         holderCount: token.holderCount,
@@ -595,15 +611,15 @@ async function discoverCandidateTokens(nowMs = Date.now()): Promise<CandidateTok
   return candidates;
 }
 
-async function computeDailyAgentTokenPicks(nowMs = Date.now()): Promise<TokenPickMap> {
-  const dailySeed = getDailySeed(nowMs);
+async function computeAgentTokenPicksForEpoch(epochId: bigint | number, nowMs = Date.now()): Promise<TokenPickMap> {
+  const epochSeed = getEpochSeed(epochId);
   const candidates = await discoverCandidateTokens(nowMs);
 
   const ragePool = sortByScore(candidates, "rageScore");
   const ghostPool = sortByScore(candidates, "ghostScore");
   const oraclePool = sortByScore(candidates, "oracleScore");
   const glitchSource = sortByScore(candidates, "hypeScore").slice(0, Math.min(12, candidates.length));
-  const glitchPool = buildGlitchPool(glitchSource.length > 0 ? glitchSource : candidates, dailySeed);
+  const glitchPool = buildGlitchPool(glitchSource.length > 0 ? glitchSource : candidates, epochSeed);
 
   const usedAddresses = new Set<string>();
 
@@ -613,19 +629,19 @@ async function computeDailyAgentTokenPicks(nowMs = Date.now()): Promise<TokenPic
   }
   usedAddresses.add(rageToken.address);
 
-  const ghostToken = pickUniqueToken(ghostPool, usedAddresses, dailySeed + 1);
+  const ghostToken = pickUniqueToken(ghostPool, usedAddresses, epochSeed + 1);
   if (!ghostToken) {
     throw new Error("Unable to pick a token for GHOST");
   }
   usedAddresses.add(ghostToken.address);
 
-  const oracleToken = pickUniqueToken(oraclePool, usedAddresses, dailySeed + 2);
+  const oracleToken = pickUniqueToken(oraclePool, usedAddresses, epochSeed + 2);
   if (!oracleToken) {
     throw new Error("Unable to pick a token for ORACLE");
   }
   usedAddresses.add(oracleToken.address);
 
-  const glitchToken = pickUniqueToken(glitchPool, usedAddresses, dailySeed + 3);
+  const glitchToken = pickUniqueToken(glitchPool, usedAddresses, epochSeed + 3);
   if (!glitchToken) {
     throw new Error("Unable to pick a token for GLITCH");
   }
@@ -655,30 +671,34 @@ async function computeDailyAgentTokenPicks(nowMs = Date.now()): Promise<TokenPic
 }
 
 export function getDiscoveryDailySeed(nowMs = Date.now()): number {
-  return getDailySeed(nowMs);
+  return getFallbackEpochSeed(nowMs);
 }
 
-export async function getDailyAgentTokenPicks(nowMs = Date.now()): Promise<TokenPickMap> {
-  const dailySeed = getDailySeed(nowMs);
-
-  if (cachedDailyPickState && cachedDailyPickState.dailySeed === dailySeed) {
-    return cachedDailyPickState.promise;
+export async function getAgentTokenPicksForEpoch(
+  epochId: bigint | number,
+  nowMs = Date.now(),
+): Promise<TokenPickMap> {
+  const epochSeed = getEpochSeed(epochId);
+  const cached = cachedEpochPickStates.get(epochSeed);
+  if (cached) {
+    return cached;
   }
 
-  const promise = computeDailyAgentTokenPicks(nowMs);
-  cachedDailyPickState = {
-    dailySeed,
-    promise,
-  };
+  const promise = computeAgentTokenPicksForEpoch(epochSeed, nowMs);
+  cachedEpochPickStates.set(epochSeed, promise);
 
   try {
     return await promise;
   } catch (error) {
-    if (cachedDailyPickState?.promise === promise) {
-      cachedDailyPickState = null;
+    if (cachedEpochPickStates.get(epochSeed) === promise) {
+      cachedEpochPickStates.delete(epochSeed);
     }
     throw error;
   }
+}
+
+export async function getDailyAgentTokenPicks(nowMs = Date.now()): Promise<TokenPickMap> {
+  return getAgentTokenPicksForEpoch(getFallbackEpochSeed(nowMs), nowMs);
 }
 
 export async function agentPickToken(agentId: AgentId, nowMs = Date.now()): Promise<DiscoveredInkToken> {
@@ -686,8 +706,11 @@ export async function agentPickToken(agentId: AgentId, nowMs = Date.now()): Prom
   return picks[agentId].token;
 }
 
-export async function getLiveDailyAgentTokenPicks(nowMs = Date.now()): Promise<TokenPickMap> {
-  const baselinePicks = await getDailyAgentTokenPicks(nowMs);
+export async function getLiveAgentTokenPicksForEpoch(
+  epochId: bigint | number,
+  nowMs = Date.now(),
+): Promise<TokenPickMap> {
+  const baselinePicks = await getAgentTokenPicksForEpoch(epochId, nowMs);
   const addresses = Object.values(baselinePicks).map((pick) => pick.token.address);
   const pairByAddress = await fetchDexPairsByAddress(addresses);
 
@@ -696,6 +719,7 @@ export async function getLiveDailyAgentTokenPicks(nowMs = Date.now()): Promise<T
   (Object.values(baselinePicks) as AgentTokenPick[]).forEach((pick) => {
     const baselineToken = pick.token;
     const pair = pairByAddress.get(baselineToken.address) || null;
+    const dexPriceUsd = toNumber(pair?.priceUsd);
     const dexVolume24h = toNumber(pair?.volume?.h24);
     const dexPriceChange24h = toNumber(pair?.priceChange?.h24);
     const dexLiquidityUsd = toNumber(pair?.liquidity?.usd);
@@ -706,6 +730,7 @@ export async function getLiveDailyAgentTokenPicks(nowMs = Date.now()): Promise<T
       ...pick,
       token: {
         ...baselineToken,
+        priceUsd: dexPriceUsd || baselineToken.priceUsd,
         priceChange24h: dexPriceChange24h || baselineToken.priceChange24h,
         volume24h: dexVolume24h || baselineToken.volume24h,
         liquidityUsd: dexLiquidityUsd || baselineToken.liquidityUsd,
@@ -718,4 +743,51 @@ export async function getLiveDailyAgentTokenPicks(nowMs = Date.now()): Promise<T
   });
 
   return livePicks;
+}
+
+export async function getLiveDailyAgentTokenPicks(nowMs = Date.now()): Promise<TokenPickMap> {
+  return getLiveAgentTokenPicksForEpoch(getFallbackEpochSeed(nowMs), nowMs);
+}
+
+export async function getLiveArenaTokenMetrics(
+  addresses: string[],
+  nowMs = Date.now(),
+): Promise<Record<string, LiveArenaTokenMetrics>> {
+  const normalizedAddresses = addresses.map((address) => normalizeAddress(address)).filter((address) => address.length > 0);
+  const pairByAddress = await fetchDexPairsByAddress(normalizedAddresses);
+  const inkyTokens = await fetchInkyPumpPages();
+  const inkyByAddress = new Map(inkyTokens.map((token) => [token.address, token]));
+  const holderDeltaByAddress = await updateHolderSnapshots(
+    inkyTokens.map((token) => ({
+      address: token.address,
+      symbol: token.symbol,
+      name: token.name,
+      holderCount: token.holderCount,
+    })),
+    nowMs,
+  );
+
+  const metricsByAddress: Record<string, LiveArenaTokenMetrics> = {};
+
+  normalizedAddresses.forEach((address) => {
+    const pair = pairByAddress.get(address) || null;
+    const inkyToken = inkyByAddress.get(address) || null;
+    const txCount = toNumber(pair?.txns?.h24?.buys) + toNumber(pair?.txns?.h24?.sells);
+
+    metricsByAddress[address] = {
+      address,
+      symbol: inkyToken?.symbol || pair?.baseToken?.symbol || "UNKNOWN",
+      priceUsd: toNumber(pair?.priceUsd),
+      volume24h: toNumber(pair?.volume?.h24) || toNumber(inkyToken?.volume24h),
+      holderCount: toNumber(inkyToken?.holderCount),
+      liquidityUsd: toNumber(pair?.liquidity?.usd),
+      txCount24h: txCount || toNumber(inkyToken?.txCount24h),
+    };
+
+    if (holderDeltaByAddress[address] === null && metricsByAddress[address].holderCount === 0 && inkyToken) {
+      metricsByAddress[address].holderCount = inkyToken.holderCount;
+    }
+  });
+
+  return metricsByAddress;
 }

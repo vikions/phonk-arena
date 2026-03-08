@@ -11,6 +11,7 @@ export interface InkToken {
 }
 
 export interface DiscoveredInkToken extends InkToken {
+  priceUsd: number;
   holderDelta24h: number | null;
   liquidityUsd: number;
   txCount24h: number;

@@ -1,53 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getCurrentEpochId } from "@/lib/contract";
-import { getDailyAgentTokenPicks } from "@/lib/server/tokenDiscovery";
+import { isAdminAuthorized } from "@/lib/server/arenaOracle";
+import { syncCurrentArenaEpochStart } from "@/lib/server/arenaEpochSync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.ADMIN_SECRET;
-  if (!secret) {
-    return false;
-  }
-
-  const authorization = request.headers.get("authorization")?.trim() || "";
-  const token = authorization.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length).trim()
-    : authorization;
-
-  return token === secret;
-}
-
 export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!isAdminAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const dailyPicks = await getDailyAgentTokenPicks();
-  const selections = await Promise.all(
-    ([0, 1, 2, 3] as const).map(async (agentId) => {
-      const token = dailyPicks[agentId].token;
+  try {
+    const result = await syncCurrentArenaEpochStart();
+
+    result.actions.forEach((entry) => {
       console.log(
-        `Agent ${agentId} picked: ${token.symbol} | change: ${token.priceChange24h}% | volume: ${token.volume24h} | liquidity: ${token.liquidityUsd} | txns: ${token.txCount24h}`,
+        `Arena epoch-start sync | epoch ${result.epochId} | agent ${entry.agentId} | ${entry.action}: ${entry.tokenSymbol} (${entry.tokenAddress})${entry.txHash ? ` | tx ${entry.txHash}` : ""}`,
       );
-      return {
-        agentId,
-        token: {
-          symbol: token.symbol,
-          address: token.address,
-          priceChange24h: token.priceChange24h,
-          volume24h: token.volume24h,
-        },
-      };
-    }),
-  );
+    });
 
-  // TODO: call recordTokenSelection on contract after ABI is ready.
-
-  return NextResponse.json({
-    epochId: Number(getCurrentEpochId()),
-    selections,
-  });
+    return NextResponse.json({
+      ok: true,
+      ...result,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Arena epoch-start sync failed",
+      },
+      { status: 500 },
+    );
+  }
 }

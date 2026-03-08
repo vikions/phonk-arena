@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http } from "viem";
 
 import {
-  epochArenaAbi,
-  epochArenaAddress,
-  epochArenaRpcUrl,
-  getCurrentEpochId,
-  getAgentDNA,
-  getEpochTokenSelection,
-  isEpochArenaAddressConfigured,
-} from "@/lib/contract";
+  getArenaSidecarCurrentEpochId,
+  getArenaSidecarEpochPool,
+  getArenaSidecarEpochResult,
+  getArenaSidecarTokenSelection,
+  isArenaSidecarConfigured,
+} from "@/lib/arenaSidecar";
+import { getAgentDNA } from "@/lib/contract";
 import { inkMainnet } from "@/lib/inkChain";
+import { isAdminAuthorized } from "@/lib/server/arenaOracle";
+import { getDiscoveryDailySeed, getLiveAgentTokenPicksForEpoch } from "@/lib/server/tokenDiscovery";
 import { getSnapshotBackend } from "@/lib/server/tokenSnapshotStore";
-import { getDailyAgentTokenPicks } from "@/lib/server/tokenDiscovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,95 +24,96 @@ const AGENT_NAMES: Record<0 | 1 | 2 | 3, string> = {
   3: "GLITCH",
 };
 
+const DEFAULT_RPC_URL = "https://rpc-gel.inkonchain.com";
+
 export async function GET(request: NextRequest) {
-  if (request.headers.get("Authorization") !== process.env.ADMIN_SECRET) {
+  if (!isAdminAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const publicClient = createPublicClient({
       chain: inkMainnet,
-      transport: http(epochArenaRpcUrl),
+      transport: http(process.env.NEXT_PUBLIC_INK_RPC || DEFAULT_RPC_URL),
     });
 
-    let epochId = Number(getCurrentEpochId());
+    let epochId = getDiscoveryDailySeed();
     let contractStatus = "fallback";
     let contractError: string | null = null;
-    let dailyPicks:
-      | Awaited<ReturnType<typeof getDailyAgentTokenPicks>>
-      | null = null;
-    let dailyPickError: string | null = null;
 
-    if (isEpochArenaAddressConfigured) {
-      try {
-        const epochIdRaw = await publicClient.readContract({
-          address: epochArenaAddress,
-          abi: epochArenaAbi,
-          functionName: "currentEpochId",
-        });
-        epochId = Number(epochIdRaw);
+    if (isArenaSidecarConfigured) {
+      const currentEpochId = await getArenaSidecarCurrentEpochId(publicClient);
+
+      if (currentEpochId !== null) {
+        epochId = Number(currentEpochId);
         contractStatus = "onchain";
-      } catch (error) {
+      } else {
         contractStatus = "error";
-        contractError =
-          error instanceof Error ? error.message : "Failed to read currentEpochId from contract";
+        contractError = "Failed to read currentEpochId from arena sidecar";
       }
     } else {
       contractStatus = "missing_address";
-      contractError = "NEXT_PUBLIC_EPOCH_ARENA_ADDRESS is not configured";
+      contractError = "NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS is not configured";
     }
 
-    try {
-      dailyPicks = await getDailyAgentTokenPicks();
-    } catch (error) {
-      dailyPickError =
-        error instanceof Error ? error.message : "Failed to simulate token picks";
-    }
+    let picksError: string | null = null;
+    const epochIdBigInt = BigInt(epochId);
+    const livePicks = await getLiveAgentTokenPicksForEpoch(epochIdBigInt).catch((error) => {
+      picksError = error instanceof Error ? error.message : "Failed to simulate token picks";
+      return null;
+    });
+
+    const [epochResult, epochPool] = await Promise.all([
+      getArenaSidecarEpochResult(epochIdBigInt, publicClient),
+      getArenaSidecarEpochPool(epochIdBigInt, publicClient),
+    ]);
 
     const agents = await Promise.all(
       ([0, 1, 2, 3] as const).map(async (agentId) => {
         const [dnaResult, selectionResult] = await Promise.allSettled([
           getAgentDNA(agentId, publicClient),
-          getEpochTokenSelection(BigInt(epochId), agentId, publicClient),
+          getArenaSidecarTokenSelection(epochIdBigInt, agentId, publicClient),
         ]);
 
         const dna = dnaResult.status === "fulfilled" ? dnaResult.value : null;
         const currentSelection = selectionResult.status === "fulfilled" ? selectionResult.value : null;
-        const hasRecordedSelection =
-          currentSelection &&
-          currentSelection.tokenAddress !== "0x0000000000000000000000000000000000000000" &&
-          Boolean(currentSelection.tokenSymbol);
-        const wouldPickNow = dailyPicks ? dailyPicks[agentId].token : null;
+        const wouldPickNow = livePicks ? livePicks[agentId].token : null;
 
         return {
           agentId,
           name: AGENT_NAMES[agentId],
           dna,
-          currentSelection: hasRecordedSelection && currentSelection
-            ? {
-                tokenAddress: currentSelection.tokenAddress,
-                tokenSymbol: currentSelection.tokenSymbol,
-                priceChangeBps: Math.round(currentSelection.priceChangeAtSelection),
-                volumeAtSelection: currentSelection.volumeAtSelection,
-                timestamp: currentSelection.timestamp,
-              }
-            : null,
-          wouldPickNow: wouldPickNow
-            ? {
-                symbol: wouldPickNow.symbol,
-                address: wouldPickNow.address,
-                priceChange24h: wouldPickNow.priceChange24h,
-                volume24h: wouldPickNow.volume24h,
-                holderCount: wouldPickNow.holderCount,
-                holderDelta24h: wouldPickNow.holderDelta24h,
-                liquidityUsd: wouldPickNow.liquidityUsd,
-                txCount24h: wouldPickNow.txCount24h,
-                hypeScore: wouldPickNow.hypeScore,
-                strategyScore: wouldPickNow.strategyScore,
-                pairUrl: wouldPickNow.pairUrl,
-                createdAt: wouldPickNow.createdAt,
-              }
-            : null,
+          currentSelection:
+            currentSelection?.recorded
+              ? {
+                  tokenAddress: currentSelection.tokenAddress,
+                  tokenSymbol: currentSelection.tokenSymbol,
+                  startPriceUsd: Number(currentSelection.startPriceUsdE8) / 1e8,
+                  startVolume24h: Number(currentSelection.startVolume24h),
+                  startHolderCount: Number(currentSelection.startHolderCount),
+                  startLiquidityUsd: Number(currentSelection.startLiquidityUsd),
+                  startTxCount24h: Number(currentSelection.startTxCount24h),
+                  timestamp: currentSelection.timestamp,
+                }
+              : null,
+          wouldPickNow:
+            wouldPickNow
+              ? {
+                  symbol: wouldPickNow.symbol,
+                  address: wouldPickNow.address,
+                  priceUsd: wouldPickNow.priceUsd,
+                  priceChange24h: wouldPickNow.priceChange24h,
+                  volume24h: wouldPickNow.volume24h,
+                  holderCount: wouldPickNow.holderCount,
+                  holderDelta24h: wouldPickNow.holderDelta24h,
+                  liquidityUsd: wouldPickNow.liquidityUsd,
+                  txCount24h: wouldPickNow.txCount24h,
+                  hypeScore: wouldPickNow.hypeScore,
+                  strategyScore: wouldPickNow.strategyScore,
+                  pairUrl: wouldPickNow.pairUrl,
+                  createdAt: wouldPickNow.createdAt,
+                }
+              : null,
           errors: {
             dna:
               dnaResult.status === "rejected"
@@ -126,7 +127,7 @@ export async function GET(request: NextRequest) {
                   ? selectionResult.reason.message
                   : "Failed to load current selection"
                 : null,
-            wouldPickNow: dailyPickError,
+            wouldPickNow: picksError,
           },
         };
       }),
@@ -138,6 +139,12 @@ export async function GET(request: NextRequest) {
       contractStatus,
       contractError,
       snapshotBackend: getSnapshotBackend(),
+      market: {
+        finalized: epochResult?.finalized ?? false,
+        winnerAgentId: epochResult?.winnerAgentId ?? null,
+        totalPoolWei: epochResult?.totalPool.toString() ?? "0",
+        poolsWei: epochPool ? epochPool.pools.map((pool) => pool.toString()) : ["0", "0", "0", "0"],
+      },
       agents,
     });
   } catch (error) {
