@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createPublicClient } from "viem";
+
 import {
   finalizeArenaEpoch,
   getArenaSidecarCurrentEpochId,
@@ -9,6 +11,9 @@ import {
   isArenaSidecarEpochOpen,
   recordArenaTokenSelection,
 } from "@/lib/arenaSidecar";
+import { inkMainnet } from "@/lib/inkChain";
+import { getInkRpcTransport } from "@/lib/inkRpc";
+import { applyArenaEpochProgressionIfNeeded } from "@/lib/server/agentProfileStore";
 import { getArenaOracleWalletClient } from "@/lib/server/arenaOracle";
 import { getAgentTokenPicksForEpoch, getLiveArenaTokenMetrics } from "@/lib/server/tokenDiscovery";
 
@@ -164,11 +169,13 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
 
   const existingResult = await getArenaSidecarEpochResult(targetEpochId);
   if (existingResult?.finalized) {
+    const progression = await applyArenaEpochProgressionIfNeeded(targetEpochId, existingResult.winnerAgentId);
     return {
       epochId: Number(targetEpochId),
       action: "skipped",
       reason: "already_finalized",
       winnerAgentId: existingResult.winnerAgentId,
+      progression,
     };
   }
 
@@ -238,18 +245,47 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
   });
 
   if (txHash === null) {
+    const progression = existingResult
+      ? await applyArenaEpochProgressionIfNeeded(targetEpochId, existingResult.winnerAgentId)
+      : null;
     return {
       epochId: Number(targetEpochId),
       action: "skipped",
       reason: "already_finalized",
       winnerAgentId: existingResult?.winnerAgentId ?? null,
+      progression,
     };
+  }
+
+  let progression:
+    | Awaited<ReturnType<typeof applyArenaEpochProgressionIfNeeded>>
+    | null = null;
+
+  try {
+    const publicClient = createPublicClient({
+      chain: inkMainnet,
+      transport: getInkRpcTransport(),
+    });
+
+    await publicClient.waitForTransactionReceipt({
+      hash: txHash,
+      confirmations: 1,
+      timeout: 30_000,
+    });
+
+    const finalizedResult = await getArenaSidecarEpochResult(targetEpochId, publicClient);
+    if (finalizedResult?.finalized) {
+      progression = await applyArenaEpochProgressionIfNeeded(targetEpochId, finalizedResult.winnerAgentId);
+    }
+  } catch {
+    progression = null;
   }
 
   return {
     epochId: Number(targetEpochId),
     action: "finalized",
     txHash,
+    progression,
     metrics: selections.map(({ agentId, selection }) => ({
       agentId,
       tokenSymbol: selection.tokenSymbol,

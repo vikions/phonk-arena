@@ -3,11 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { startTransition, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { usePublicClient } from "wagmi";
 
 import { useArenaAudio } from "@/components/ArenaAudioProvider";
 import { preloadPhonkResources, renderPhonkClip } from "@/lib/audio/phonkSynth";
-import { getAgentDNA } from "@/lib/contract";
 import { DEFAULT_DNA } from "@/lib/musicEngine";
 import type { AgentDNA } from "@/lib/musicEngine";
 import type { DailyAgentPicksResponse, DiscoveredInkToken } from "@/lib/tokenDiscovery";
@@ -194,7 +192,6 @@ function buildPreviewClipConfig(agent: AgentDisplay, token: DiscoveredInkToken, 
 }
 
 export function ArenaFoyerClient() {
-  const publicClient = usePublicClient();
   const { setPreviewSuppressed } = useArenaAudio();
   const [agentState, setAgentState] = useState<Record<ArenaAgentId, AgentFoyerState>>({
     0: defaultAgentState(0),
@@ -242,14 +239,7 @@ export function ArenaFoyerClient() {
         const picksRequest = fetch("/api/epoch-battle", {
           cache: "no-store",
         });
-        const dnaRequest = Promise.all(
-          AGENTS.map(async (agent) => ({
-            agentId: agent.agentId,
-            dna: await getAgentDNA(agent.agentId, publicClient),
-          })),
-        );
-
-        const [picksResponse, dnaPayload] = await Promise.all([picksRequest, dnaRequest]);
+        const picksResponse = await picksRequest;
         if (!picksResponse.ok) {
           throw new Error("Failed to load agent chamber.");
         }
@@ -270,23 +260,19 @@ export function ArenaFoyerClient() {
           };
         }
 
-        for (const entry of dnaPayload) {
-          if (!entry.dna) {
-            continue;
-          }
-
+        for (const entry of picksPayload.profiles || []) {
           nextState[entry.agentId] = {
             ...nextState[entry.agentId],
             dna: {
-              bpmRange: entry.dna.bpmRange || DEFAULT_DNA[entry.agentId].bpmRange,
-              layerDensity: entry.dna.layerDensity || DEFAULT_DNA[entry.agentId].layerDensity,
-              glitchIntensity: entry.dna.glitchIntensity || DEFAULT_DNA[entry.agentId].glitchIntensity,
-              bassWeight: entry.dna.bassWeight || DEFAULT_DNA[entry.agentId].bassWeight,
-              mutationVersion: entry.dna.mutationVersion,
+              bpmRange: entry.profile.bpmRange || DEFAULT_DNA[entry.agentId].bpmRange,
+              layerDensity: entry.profile.layerDensity || DEFAULT_DNA[entry.agentId].layerDensity,
+              glitchIntensity: entry.profile.glitchIntensity || DEFAULT_DNA[entry.agentId].glitchIntensity,
+              bassWeight: entry.profile.bassWeight || DEFAULT_DNA[entry.agentId].bassWeight,
+              mutationVersion: entry.profile.mutationVersion,
             },
-            mutationVersion: entry.dna.mutationVersion,
-            wins: entry.dna.wins,
-            losses: entry.dna.losses,
+            mutationVersion: entry.profile.mutationVersion,
+            wins: entry.profile.wins,
+            losses: entry.profile.losses,
           };
         }
 
@@ -312,7 +298,7 @@ export function ArenaFoyerClient() {
     return () => {
       cancelled = true;
     };
-  }, [publicClient]);
+  }, []);
 
   useEffect(() => {
     return () => {

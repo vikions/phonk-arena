@@ -1,5 +1,20 @@
 export type AgentId = 0 | 1 | 2 | 3;
 
+export interface AgentRuntimeProfilePayload {
+  agentId: AgentId;
+  profile: {
+    mutationVersion: number;
+    bpmRange: number;
+    layerDensity: number;
+    glitchIntensity: number;
+    bassWeight: number;
+    wins: number;
+    losses: number;
+    source: "postgres" | "seed" | "default" | "contract";
+    updatedAt: string | null;
+  };
+}
+
 export interface InkToken {
   address: string;
   symbol: string;
@@ -33,5 +48,7 @@ export interface AgentTokenPick {
 export interface DailyAgentPicksResponse {
   generatedAt: string;
   dailySeed: number;
+  epochId?: number;
   picks: AgentTokenPick[];
+  profiles?: AgentRuntimeProfilePayload[];
 }

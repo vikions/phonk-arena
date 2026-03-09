@@ -131,6 +131,20 @@ export function EpochBattleSection({ onBet }: EpochBattleSectionProps) {
         }),
       );
 
+      for (const entry of picksPayload.profiles || []) {
+        nextDnas[entry.agentId] = {
+          bpmRange: entry.profile.bpmRange || DEFAULT_DNA[entry.agentId].bpmRange,
+          layerDensity: entry.profile.layerDensity || DEFAULT_DNA[entry.agentId].layerDensity,
+          glitchIntensity: entry.profile.glitchIntensity || DEFAULT_DNA[entry.agentId].glitchIntensity,
+          bassWeight: entry.profile.bassWeight || DEFAULT_DNA[entry.agentId].bassWeight,
+          mutationVersion: entry.profile.mutationVersion,
+        };
+        nextRecords[entry.agentId] = {
+          wins: entry.profile.wins,
+          losses: entry.profile.losses,
+        };
+      }
+
       setTokens(nextTokens);
       setDnas(nextDnas);
       setRecords(nextRecords);

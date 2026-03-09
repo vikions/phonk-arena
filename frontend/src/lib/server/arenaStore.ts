@@ -1,7 +1,7 @@
 import "server-only";
 
-import { getAgentDNA } from "@/lib/contract";
 import { getArenaSidecarCurrentEpochId, getArenaSidecarEpochEnd, getArenaSidecarEpochStart, isArenaSidecarConfigured } from "@/lib/arenaSidecar";
+import { defaultAgentRuntimeProfiles } from "@/lib/agentProfiles";
 import type {
   ArenaAgentDnaSnapshot,
   ArenaAgentId,
@@ -13,6 +13,7 @@ import type {
   ArenaScoreBreakdown,
 } from "@/lib/arenaTypes";
 import { DEFAULT_DNA } from "@/lib/musicEngine";
+import { getAgentRuntimeProfiles } from "@/lib/server/agentProfileStore";
 import { getAgentTokenPicksForEpoch, getLiveAgentTokenPicksForEpoch } from "@/lib/server/tokenDiscovery";
 import type { DiscoveredInkToken } from "@/lib/tokenDiscovery";
 import type { AgentId, AgentStrategy, AgentStyle, LobbyId } from "@/lib/types";
@@ -300,42 +301,25 @@ async function getArenaFeed(
   ]);
 
   const liveTokens = AGENT_META.map((agent) => livePicks?.[agent.agentId]?.token ?? selectedPicks[agent.agentId].token);
-  const dnaEntries = await Promise.all(
-    AGENT_META.map(async (agent) => {
-      const contractDna = await getAgentDNA(agent.agentId);
-      return {
-        agentId: agent.agentId,
-        dna: {
-          mutationVersion: contractDna?.mutationVersion ?? DEFAULT_DNA[agent.agentId].mutationVersion,
-          bpmRange: contractDna?.bpmRange ?? DEFAULT_DNA[agent.agentId].bpmRange,
-          layerDensity: contractDna?.layerDensity ?? DEFAULT_DNA[agent.agentId].layerDensity,
-          glitchIntensity: contractDna?.glitchIntensity ?? DEFAULT_DNA[agent.agentId].glitchIntensity,
-          bassWeight: contractDna?.bassWeight ?? DEFAULT_DNA[agent.agentId].bassWeight,
-          wins: contractDna?.wins ?? 0,
-          losses: contractDna?.losses ?? 0,
-        } satisfies ArenaAgentDnaSnapshot,
-      };
-    }),
-  );
-
-  const dnaByAgent = new Map(dnaEntries.map((entry) => [entry.agentId, entry.dna]));
+  const runtimeProfiles = await getAgentRuntimeProfiles().catch(() => defaultAgentRuntimeProfiles());
   const agents = AGENT_META.map((agent) => {
     const selectedToken = selectedPicks[agent.agentId].token;
     const token = livePicks?.[agent.agentId]?.token ?? selectedToken;
+    const runtimeProfile = runtimeProfiles[agent.agentId];
 
     return {
       ...agent,
       token,
       selectedToken,
-      dna: dnaByAgent.get(agent.agentId) ?? {
-        mutationVersion: DEFAULT_DNA[agent.agentId].mutationVersion,
-        bpmRange: DEFAULT_DNA[agent.agentId].bpmRange,
-        layerDensity: DEFAULT_DNA[agent.agentId].layerDensity,
-        glitchIntensity: DEFAULT_DNA[agent.agentId].glitchIntensity,
-        bassWeight: DEFAULT_DNA[agent.agentId].bassWeight,
-        wins: 0,
-        losses: 0,
-      },
+      dna: {
+        mutationVersion: runtimeProfile?.mutationVersion ?? DEFAULT_DNA[agent.agentId].mutationVersion,
+        bpmRange: runtimeProfile?.bpmRange ?? DEFAULT_DNA[agent.agentId].bpmRange,
+        layerDensity: runtimeProfile?.layerDensity ?? DEFAULT_DNA[agent.agentId].layerDensity,
+        glitchIntensity: runtimeProfile?.glitchIntensity ?? DEFAULT_DNA[agent.agentId].glitchIntensity,
+        bassWeight: runtimeProfile?.bassWeight ?? DEFAULT_DNA[agent.agentId].bassWeight,
+        wins: runtimeProfile?.wins ?? 0,
+        losses: runtimeProfile?.losses ?? 0,
+      } satisfies ArenaAgentDnaSnapshot,
       score: buildScoreBreakdown(liveTokens, token),
     };
   });

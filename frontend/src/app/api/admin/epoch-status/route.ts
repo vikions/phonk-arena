@@ -8,9 +8,9 @@ import {
   getArenaSidecarTokenSelection,
   isArenaSidecarConfigured,
 } from "@/lib/arenaSidecar";
-import { getAgentDNA } from "@/lib/contract";
 import { inkMainnet } from "@/lib/inkChain";
 import { getInkRpcTransport } from "@/lib/inkRpc";
+import { getAgentRuntimeProfiles } from "@/lib/server/agentProfileStore";
 import { isAdminAuthorized } from "@/lib/server/arenaOracle";
 import { getDiscoveryDailySeed, getLiveAgentTokenPicksForEpoch } from "@/lib/server/tokenDiscovery";
 import { getSnapshotBackend } from "@/lib/server/tokenSnapshotStore";
@@ -66,15 +66,15 @@ export async function GET(request: NextRequest) {
       getArenaSidecarEpochResult(epochIdBigInt, publicClient),
       getArenaSidecarEpochPool(epochIdBigInt, publicClient),
     ]);
+    const runtimeProfiles = await getAgentRuntimeProfiles();
 
     const agents = await Promise.all(
       ([0, 1, 2, 3] as const).map(async (agentId) => {
-        const [dnaResult, selectionResult] = await Promise.allSettled([
-          getAgentDNA(agentId, publicClient),
-          getArenaSidecarTokenSelection(epochIdBigInt, agentId, publicClient),
-        ]);
+        const selectionResult = await getArenaSidecarTokenSelection(epochIdBigInt, agentId, publicClient)
+          .then((value) => ({ status: "fulfilled" as const, value }))
+          .catch((reason) => ({ status: "rejected" as const, reason }));
 
-        const dna = dnaResult.status === "fulfilled" ? dnaResult.value : null;
+        const dna = runtimeProfiles[agentId] ?? null;
         const currentSelection = selectionResult.status === "fulfilled" ? selectionResult.value : null;
         const wouldPickNow = livePicks ? livePicks[agentId].token : null;
 
@@ -114,12 +114,7 @@ export async function GET(request: NextRequest) {
                 }
               : null,
           errors: {
-            dna:
-              dnaResult.status === "rejected"
-                ? dnaResult.reason instanceof Error
-                  ? dnaResult.reason.message
-                  : "Failed to load DNA"
-                : null,
+            dna: null,
             currentSelection:
               selectionResult.status === "rejected"
                 ? selectionResult.reason instanceof Error
