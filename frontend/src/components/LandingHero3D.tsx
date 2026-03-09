@@ -323,6 +323,7 @@ export function LandingHero3D() {
 
       <div className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(circle_at_50%_42%,rgba(95,47,180,0.24),transparent_45%),radial-gradient(circle_at_50%_34%,rgba(194,52,101,0.24),transparent_36%),radial-gradient(circle_at_50%_82%,rgba(0,0,0,0.45),rgba(0,0,0,0.82)_72%)]" />
       <div className="pointer-events-none fixed inset-0 z-[2] opacity-[0.08] [background-image:radial-gradient(rgba(255,255,255,0.75)_0.45px,transparent_0.45px)] [background-size:3px_3px]" />
+      <div className="hero-scanline fixed inset-x-0 top-[var(--topbar-height)] z-[12]" />
 
       <div
         className={`pointer-events-none fixed inset-x-0 bottom-0 top-[var(--topbar-height)] z-10 flex items-center justify-center px-4 pb-12 pt-10 transition-opacity duration-300 sm:px-6 sm:pb-14 sm:pt-12 ${
@@ -334,12 +335,8 @@ export function LandingHero3D() {
             entered ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
           }`}
         >
-          <p className="font-display text-3xl uppercase tracking-[0.2em] text-white sm:text-5xl">
-            PHONK ARENA
-          </p>
-          <p className="mt-2 text-xs uppercase tracking-[0.17em] text-white/72 sm:text-sm">
-            Autonomous Agents Battling on INK
-          </p>
+          <p className="hero-title text-white">PHONK ARENA</p>
+          <p className="hero-eyebrow mt-4">Autonomous Agents Battling on Ink</p>
 
           <div className="pointer-events-auto mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <button
@@ -358,12 +355,12 @@ export function LandingHero3D() {
               onMouseEnter={warmArena}
               onFocus={warmArena}
               disabled={leaving}
-              className="w-full max-w-xs rounded-xl border border-cyan-300/70 bg-cyan-300/20 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-300/35 disabled:opacity-70 sm:text-sm"
+              className="btn-enter w-full max-w-xs disabled:opacity-70"
             >
               ENTER THE ARENA
             </button>
             <HowItWorksModal
-              triggerClassName="w-full max-w-xs rounded-xl border border-white/30 bg-black/35 px-6 py-2.5 text-xs font-semibold text-white/90 transition hover:border-cyan-300/75 hover:text-cyan-100 sm:w-auto sm:text-sm"
+              triggerClassName="w-full max-w-xs rounded-[4px] border border-[var(--border)] bg-black/35 px-6 py-[14px] text-[12px] font-semibold uppercase tracking-[0.18em] text-white/88 transition hover:border-white/25 hover:text-white sm:w-auto"
             />
           </div>
         </div>

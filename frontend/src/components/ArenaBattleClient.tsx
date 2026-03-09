@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { formatEther, parseEther } from "viem";
 import {
   useAccount,
@@ -70,29 +70,16 @@ function queueFrom(currentClipIndex: number): ArenaAgentId[] {
   return [0, 1, 2, 3].map((offset) => ((currentClipIndex + offset) % 4) as ArenaAgentId);
 }
 
-function scoreBarClass(agentId: ArenaAgentId): string {
+function agentColorVariable(agentId: ArenaAgentId): string {
   switch (agentId) {
     case 0:
-      return "bg-rose-400/90";
+      return "var(--rage)";
     case 1:
-      return "bg-sky-300/90";
+      return "var(--ghost)";
     case 2:
-      return "bg-amber-300/90";
+      return "var(--oracle)";
     default:
-      return "bg-emerald-300/90";
-  }
-}
-
-function borderClass(agentId: ArenaAgentId): string {
-  switch (agentId) {
-    case 0:
-      return "border-rose-300/30";
-    case 1:
-      return "border-sky-300/30";
-    case 2:
-      return "border-amber-300/30";
-    default:
-      return "border-emerald-300/30";
+      return "var(--glitch)";
   }
 }
 
@@ -109,13 +96,16 @@ function AgentNode({
 
   return (
     <article
-      className={`relative overflow-hidden rounded-[1.8rem] border bg-[linear-gradient(180deg,rgba(7,10,18,0.95),rgba(5,7,14,0.98))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.45)] transition duration-300 ${borderClass(agent.agentId)} ${isActive ? "z-10 scale-[1.035] ring-2 ring-white/35" : "scale-[0.965] opacity-55"}`}
-      style={{
-        filter: isActive ? "saturate(1.22) brightness(1.15)" : "saturate(0.52) brightness(0.62)",
-        boxShadow: isActive
-          ? `0 24px 70px rgba(0,0,0,0.52), 0 0 0 1px rgba(255,255,255,0.08), 0 0 84px ${agent.aura}`
-          : `0 16px 46px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04)`,
-      }}
+      className={`agent-card rounded-[1.8rem] p-4 ${isActive ? "z-10 scale-[1.035]" : "scale-[0.965] opacity-55"}`}
+      style={
+        {
+          "--agent-color": agentColorVariable(agent.agentId),
+          filter: isActive ? "saturate(1.22) brightness(1.15)" : "saturate(0.52) brightness(0.62)",
+          boxShadow: isActive
+            ? `0 24px 70px rgba(0,0,0,0.52), 0 0 0 1px rgba(255,255,255,0.08), 0 0 84px ${agent.aura}`
+            : `0 16px 46px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04)`,
+        } as CSSProperties
+      }
     >
       <div className="pointer-events-none absolute inset-0">
         <Image
@@ -146,17 +136,17 @@ function AgentNode({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="font-display text-2xl uppercase tracking-[0.12em] text-white">{agent.name}</h3>
-              <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-white/56">{agent.role}</p>
+              <h3 className="agent-name text-[2rem]">{agent.name}</h3>
+              <p className="agent-role mt-1">{agent.role}</p>
             </div>
             <div className="flex flex-col items-end gap-2">
               {isLeader ? (
-                <span className="rounded-full border border-amber-300/40 bg-amber-300/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-100">
+                <span className="rounded-[2px] border border-[var(--oracle)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oracle)]">
                   Crown Lead
                 </span>
               ) : null}
               {isActive ? (
-                <span className="rounded-full border border-cyan-200/40 bg-cyan-300/16 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.28)]">
+                <span className="live-badge shadow-[0_0_24px_color-mix(in_srgb,var(--agent-color)_35%,transparent)]">
                   Live Now
                 </span>
               ) : null}
@@ -165,24 +155,24 @@ function AgentNode({
 
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-white/42">Held Today</p>
-              <p className="overflow-hidden text-ellipsis whitespace-nowrap font-display text-lg uppercase tracking-[0.08em] text-white">
+              <p className="stat-label">Held Today</p>
+              <p className="agent-name mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-[1.45rem]">
                 {agent.token.symbol}
               </p>
             </div>
-            <div className="text-right font-mono text-[11px] uppercase tracking-[0.14em] text-white/62">
+            <div className="mono text-right text-[11px] uppercase tracking-[0.14em] text-white/62">
               <p>{agent.strategyLabel}</p>
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-[11px] text-white/82">
-            <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">Battle Score</p>
-              <p>{agent.score.total.toFixed(1)}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="data-chip rounded-[6px] px-3 py-2">
+              <p className="stat-label">Battle Score</p>
+              <p className="stat-value mt-1">{agent.score.total.toFixed(1)}</p>
             </div>
-            <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">24h Move</p>
-              <p className={positiveMove ? "text-emerald-300" : "text-rose-300"}>
+            <div className="data-chip rounded-[6px] px-3 py-2">
+              <p className="stat-label">24h Move</p>
+              <p className={`stat-value mt-1 ${positiveMove ? "positive" : "negative"}`}>
                 {positiveMove ? "+" : ""}
                 {agent.token.priceChange24h.toFixed(2)}%
               </p>
@@ -190,20 +180,20 @@ function AgentNode({
           </div>
 
           <div className="mt-3">
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-white/44">
+            <div className="progress-label">
               <span>Crown Pressure</span>
-              <span>{agent.score.total.toFixed(0)} / 100</span>
+              <span className="progress-value">{agent.score.total.toFixed(0)} / 100</span>
             </div>
-            <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/8">
+            <div className="progress-wrap mt-1">
               <div
-                className={`h-full rounded-full ${scoreBarClass(agent.agentId)}`}
+                className="progress-fill"
                 style={{ width: `${Math.max(8, Math.min(100, agent.score.total))}%` }}
               />
             </div>
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-white/56">
-            <span className="font-mono">BPM {agent.dna.bpmRange}</span>
+            <span className="bpm mono">BPM {agent.dna.bpmRange}</span>
             {agent.token.pairUrl ? (
               <Link href={agent.token.pairUrl} target="_blank" rel="noreferrer" className="transition hover:text-white">
                 Market Trace
@@ -830,24 +820,24 @@ export function ArenaBattleClient() {
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(7,8,16,0.96),rgba(8,16,30,0.9))] px-5 py-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:px-7 sm:py-7">
+      <section className="panel-shell relative overflow-hidden rounded-[2rem] px-5 py-6 sm:px-7 sm:py-7">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(244,63,94,0.14),transparent_36%),radial-gradient(circle_at_80%_18%,rgba(34,211,238,0.14),transparent_30%),radial-gradient(circle_at_16%_88%,rgba(250,204,21,0.12),transparent_28%)]" />
         <div className="relative flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-4xl">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-white/48">Battle Platform</p>
-            <h1 className="mt-2 font-display text-3xl uppercase tracking-[0.12em] text-white sm:text-4xl xl:text-[2.8rem]">
+            <p className="hero-eyebrow text-[11px] text-white/48">Battle Platform</p>
+            <h1 className="section-title mt-2 text-white">
               Four Agents. One Crown.
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/72 sm:text-base">
+            <p className="subtitle mt-3 max-w-3xl text-sm leading-6 text-white/72 sm:text-base">
               Crowd taste no longer decides the winner. The arena crowns whoever drives the strongest token signal on Ink:
               price first, then volume, then live market flow.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-white/62">
-            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Listeners {snapshot.listeners}</span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Epoch {snapshot.currentEpoch.epochId}</span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">{snapshot.currentEpoch.scoringRule}</span>
+          <div className="flex flex-wrap gap-2">
+            <span className="feature-badge">Listeners {snapshot.listeners}</span>
+            <span className="feature-badge">Epoch {snapshot.currentEpoch.epochId}</span>
+            <span className="feature-badge">{snapshot.currentEpoch.scoringRule}</span>
           </div>
         </div>
       </section>
@@ -856,12 +846,12 @@ export function ArenaBattleClient() {
         <button
           type="button"
           onClick={() => void enableAudio()}
-          className="rounded-xl border border-cyan-300/60 bg-cyan-300/18 px-4 py-2 text-sm font-semibold uppercase tracking-[0.14em] text-cyan-100 transition hover:bg-cyan-300/28"
+          className="btn-enter inline-flex"
         >
           Enable Arena Audio
         </button>
       ) : (
-        <p className="text-xs uppercase tracking-[0.18em] text-cyan-200/76">
+        <p className="hero-eyebrow text-xs text-white/62">
           Arena audio unlocked. Each agent gets 10 seconds on the floor with a 2.5 second transition gap.
         </p>
       )}
@@ -902,16 +892,25 @@ export function ArenaBattleClient() {
         </div>
 
         <div className="order-1 space-y-4 xl:order-2">
-          <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(6,8,16,0.96),rgba(5,7,14,0.98))] p-5 shadow-[0_20px_70px_rgba(0,0,0,0.45)]">
+          <section className="panel-shell relative overflow-hidden rounded-[2rem] p-5">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.14),transparent_44%)]" />
             <div className="relative">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-white/48">Live Floor</p>
-                  <h2 className="mt-2 font-display text-3xl uppercase tracking-[0.12em] text-white">
+                  <p className="hero-eyebrow text-[11px] text-white/48">Live Floor</p>
+                  <h2
+                    className="live-agent-name mt-2 text-[clamp(3rem,4.6vw,4.2rem)]"
+                    style={
+                      {
+                        "--agent-color": currentPlayingAgent
+                          ? agentColorVariable(currentPlayingAgent.agentId)
+                          : "var(--text)",
+                      } as CSSProperties
+                    }
+                  >
                     {currentPlayingAgent ? currentPlayingAgent.name : "Transition Gap"}
                   </h2>
-                  <p className="mt-2 text-sm text-white/70">
+                  <p className="subtitle mt-2 text-sm text-white/70">
                     {currentPlayingAgent
                       ? `${currentPlayingAgent.token.symbol} is on the speakers right now.`
                       : snapshot.status === "LIVE"
@@ -921,53 +920,62 @@ export function ArenaBattleClient() {
                 </div>
 
                 <div className="grid gap-2 text-right">
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/42">Clip Timer</p>
-                    <p className="font-display text-xl text-white">{snapshot.nowPlaying ? `${secondsLeft}s` : "PAUSE"}</p>
+                  <div className="data-chip rounded-[6px] px-3 py-2">
+                    <p className="stat-label">Clip Timer</p>
+                    <p className="timer mt-1 text-[2rem] text-white">{snapshot.nowPlaying ? `${secondsLeft}s` : "PAUSE"}</p>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/42">Epoch Left</p>
-                    <p className="font-display text-lg text-white">{formatCountdown(epochSecondsLeft)}</p>
+                  <div className="data-chip rounded-[6px] px-3 py-2">
+                    <p className="stat-label">Epoch Left</p>
+                    <p className="timer mt-1 text-[2rem] text-white">{formatCountdown(epochSecondsLeft)}</p>
                   </div>
                 </div>
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
                 <div className="rounded-[1.4rem] border border-white/10 bg-black/28 p-4">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-white/42">Winner Logic</p>
-                  <div className="mt-3 space-y-3 font-mono text-[11px] text-white/80">
+                  <p className="stat-label">Winner Logic</p>
+                  <div className="mt-3 space-y-3 mono text-[11px] text-white/80">
                     <div>
-                      <div className="mb-1 flex items-center justify-between">
+                      <div className="progress-label mb-1" style={{ marginBottom: "6px" }}>
                         <span>Price Surge</span>
-                        <span>55%</span>
+                        <span className="progress-value" style={{ ["--agent-color" as string]: "var(--rage)" } as CSSProperties}>55%</span>
                       </div>
-                      <div className="h-2 rounded-full bg-white/8">
-                        <div className="h-full w-[55%] rounded-full bg-rose-300/85" />
+                      <div className="progress-wrap">
+                        <div
+                          className="progress-fill after:content-none"
+                          style={{ width: "55%", ["--agent-color" as string]: "var(--rage)" } as CSSProperties}
+                        />
                       </div>
                     </div>
                     <div>
-                      <div className="mb-1 flex items-center justify-between">
+                      <div className="progress-label mb-1" style={{ marginBottom: "6px" }}>
                         <span>Volume</span>
-                        <span>25%</span>
+                        <span className="progress-value" style={{ ["--agent-color" as string]: "var(--ghost)" } as CSSProperties}>25%</span>
                       </div>
-                      <div className="h-2 rounded-full bg-white/8">
-                        <div className="h-full w-[25%] rounded-full bg-cyan-300/85" />
+                      <div className="progress-wrap">
+                        <div
+                          className="progress-fill after:content-none"
+                          style={{ width: "25%", ["--agent-color" as string]: "var(--ghost)" } as CSSProperties}
+                        />
                       </div>
                     </div>
                     <div>
-                      <div className="mb-1 flex items-center justify-between">
+                      <div className="progress-label mb-1" style={{ marginBottom: "6px" }}>
                         <span>Flow + Liquidity</span>
-                        <span>20%</span>
+                        <span className="progress-value" style={{ ["--agent-color" as string]: "var(--oracle)" } as CSSProperties}>20%</span>
                       </div>
-                      <div className="h-2 rounded-full bg-white/8">
-                        <div className="h-full w-[20%] rounded-full bg-amber-300/85" />
+                      <div className="progress-wrap">
+                        <div
+                          className="progress-fill after:content-none"
+                          style={{ width: "20%", ["--agent-color" as string]: "var(--oracle)" } as CSSProperties}
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="rounded-[1.4rem] border border-white/10 bg-black/28 p-4">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-white/42">Rotation Queue</p>
+                  <p className="stat-label">Rotation Queue</p>
                   <div className="mt-3 grid gap-2">
                     {queue.map((agentId, index) => {
                       const agent = snapshot.agents.find((entry) => entry.agentId === agentId);
@@ -978,12 +986,11 @@ export function ArenaBattleClient() {
                       return (
                         <div
                           key={`${agentId}-${index}`}
-                          className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${
-                            index === 0 ? "border-white/20 bg-white/10 text-white" : "border-white/8 bg-white/5 text-white/72"
-                          }`}
+                          className={`queue-row ${index === 0 ? "active text-white" : "text-white/72"}`}
+                          style={{ ["--agent-color" as string]: agentColorVariable(agent.agentId) } as CSSProperties}
                         >
-                          <span className="font-display uppercase tracking-[0.12em]">{agent.name}</span>
-                          <span className="font-mono text-[11px] uppercase tracking-[0.14em]">{agent.token.symbol}</span>
+                          <span>{agent.name}</span>
+                          <span className="mono text-[11px] uppercase tracking-[0.14em]">{agent.token.symbol}</span>
                         </div>
                       );
                     })}
@@ -994,16 +1001,16 @@ export function ArenaBattleClient() {
               <div className="mt-4 rounded-[1.4rem] border border-cyan-300/16 bg-cyan-300/6 p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-100/64">Live Board</p>
-                    <h3 className="mt-2 font-display text-2xl uppercase tracking-[0.12em] text-white">
+                    <p className="stat-label text-cyan-100/64">Live Board</p>
+                    <h3 className="mt-2 agent-name text-[2.2rem]">
                       No Winner Is Locked Yet
                     </h3>
-                    <p className="mt-2 max-w-2xl text-sm text-white/72">
+                    <p className="subtitle mt-2 max-w-2xl text-sm text-white/72">
                       The leaderboard is only a live read on token pressure. Scores can flip all epoch long. The winner is
                       fixed only after the epoch closes and the sidecar finalizes the result on-chain.
                     </p>
                   </div>
-                  <div className="grid gap-2 text-right font-mono text-xs uppercase tracking-[0.14em] text-white/62">
+                  <div className="mono grid gap-2 text-right text-xs uppercase tracking-[0.14em] text-white/62">
                     <p>Board updates every few seconds</p>
                     <p>Clips rotate every 10 seconds</p>
                     <p>Payouts use finalized on-chain result</p>
@@ -1014,22 +1021,26 @@ export function ArenaBattleClient() {
           </section>
 
           <section className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(7,10,18,0.95),rgba(5,7,14,0.98))] p-4">
-              <h3 className="font-display text-xl uppercase tracking-[0.1em] text-white">Leaderboard</h3>
+            <div className="panel-shell rounded-[1.8rem] p-4">
+              <h3 className="agent-name text-[1.8rem]">Leaderboard</h3>
               <div className="mt-4 space-y-3">
                 {leaderboardAgents.map((agent, index) => (
-                  <div key={agent.agentId} className="rounded-xl border border-white/8 bg-white/5 px-3 py-3">
+                  <div
+                    key={agent.agentId}
+                    className="data-chip rounded-[6px] px-3 py-3"
+                    style={{ ["--agent-color" as string]: agentColorVariable(agent.agentId) } as CSSProperties}
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-display text-lg uppercase tracking-[0.12em] text-white">
+                        <p className="agent-name text-[1.4rem]">
                           #{index + 1} {agent.name}
                         </p>
-                        <p className="mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs uppercase tracking-[0.16em] text-white/54">
+                        <p className="agent-role mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-white/54">
                           {agent.token.symbol} | {agent.strategyLabel}
                         </p>
                       </div>
-                      <div className="text-right font-mono text-xs uppercase tracking-[0.14em] text-white/68">
-                        <p>{agent.score.total.toFixed(1)}</p>
+                      <div className="mono text-right text-xs uppercase tracking-[0.14em] text-white/68">
+                        <p className="text-[var(--agent-color)]">{agent.score.total.toFixed(1)}</p>
                         <p className="mt-1">{agent.token.volume24h.toFixed(0)} vol</p>
                       </div>
                     </div>
@@ -1038,40 +1049,40 @@ export function ArenaBattleClient() {
               </div>
             </div>
 
-            <div className="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(7,10,18,0.95),rgba(5,7,14,0.98))] p-4">
-              <h3 className="font-display text-xl uppercase tracking-[0.1em] text-white">Arena Market</h3>
+            <div className="panel-shell rounded-[1.8rem] p-4">
+              <h3 className="agent-name text-[1.8rem]">Arena Market</h3>
               {!isArenaSidecarConfigured ? (
                 <>
-                  <p className="mt-3 text-sm leading-6 text-white/68">
+                  <p className="subtitle mt-3 text-sm leading-6 text-white/68">
                     Sidecar ABI or address is missing. Add the deployed sidecar and this panel will switch to real 4-way
                     bets and claims.
                   </p>
-                  <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-white/46">Status</p>
-                    <p className="mt-2 font-display text-lg uppercase tracking-[0.12em] text-white">Sidecar Not Wired</p>
+                  <div className="data-chip mt-4 rounded-[1.4rem] p-4">
+                    <p className="stat-label">Status</p>
+                    <p className="agent-name mt-2 text-[1.4rem]">Sidecar Not Wired</p>
                   </div>
                 </>
               ) : (
                 <>
-                  <p className="mt-3 text-sm leading-6 text-white/68">
+                  <p className="subtitle mt-3 text-sm leading-6 text-white/68">
                     Real ETH bets now settle through the arena sidecar. Winner still comes from token performance, not crowd
                     taste.
                   </p>
 
-                  <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
+                  <div className="data-chip mt-4 rounded-[1.4rem] p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-white/46">Current Epoch Pool</p>
-                      <p className="font-mono text-xs uppercase tracking-[0.14em] text-white/60">
+                      <p className="stat-label">Current Epoch Pool</p>
+                      <p className="mono text-xs uppercase tracking-[0.14em] text-white/60">
                         Epoch {sidecarCurrentEpochId.toString()}
                       </p>
                     </div>
-                    <p className="mt-2 font-display text-lg uppercase tracking-[0.12em] text-white">
+                    <p className="agent-name mt-2 text-[1.4rem]">
                       {currentEpochPool ? `${formatEth(currentEpochPool.totalPool)} ETH` : "Loading Pool"}
                     </p>
-                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-white/54">
+                    <p className="agent-role mt-2 text-xs text-white/54">
                       {currentEpochOpen ? "Open For Bets" : "Betting Closed"}
                     </p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-white/44">
+                    <p className="agent-role mt-1 text-xs text-white/44">
                       On-chain result:{" "}
                       {currentEpochResult?.finalized
                         ? currentEpochResult.winnerAgentId === 4
@@ -1082,7 +1093,7 @@ export function ArenaBattleClient() {
                   </div>
 
                   <div className="mt-4 grid gap-2">
-                    <label htmlFor="arena-bet-amount" className="text-[10px] uppercase tracking-[0.18em] text-white/46">
+                    <label htmlFor="arena-bet-amount" className="stat-label">
                       Bet Amount (ETH)
                     </label>
                     <input
@@ -1092,7 +1103,7 @@ export function ArenaBattleClient() {
                       step="0.001"
                       value={betAmount}
                       onChange={(event) => setBetAmount(event.target.value)}
-                      className="rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
+                      className="mono rounded-[6px] border border-white/15 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--ghost)]"
                     />
                   </div>
 
@@ -1114,7 +1125,8 @@ export function ArenaBattleClient() {
                           type="button"
                           onClick={() => void submitBet(agent.agentId)}
                           disabled={disabled}
-                          className="rounded-xl border border-white/12 bg-white/6 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-45"
+                          className="btn-phonk disabled:cursor-not-allowed disabled:opacity-45"
+                          style={{ ["--agent-color" as string]: agentColorVariable(agent.agentId) } as CSSProperties}
                         >
                           Bet {agent.name}
                         </button>
@@ -1122,7 +1134,7 @@ export function ArenaBattleClient() {
                     })}
                   </div>
 
-                  <div className="mt-4 space-y-2 text-xs text-white/76">
+                  <div className="mono mt-4 space-y-2 text-xs text-white/76">
                     <p>
                       Your current epoch bet:{" "}
                       {currentUserBet?.exists ? `${formatEth(currentUserBet.amount)} ETH on ${snapshot.agents.find((agent) => agent.agentId === currentUserBet.agentId)?.name ?? `Agent ${currentUserBet.agentId}`}` : "No active bet"}
@@ -1143,13 +1155,13 @@ export function ArenaBattleClient() {
                   ) : null}
                   {betError ? <p className="mt-3 text-xs text-red-300">{betError}</p> : null}
 
-                  <div className="mt-5 rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-white/46">Claim Rail</p>
-                    <p className="mt-2 text-xs text-white/68">
+                  <div className="data-chip mt-5 rounded-[1.4rem] p-4">
+                    <p className="stat-label">Claim Rail</p>
+                    <p className="mono mt-2 text-xs text-white/68">
                       Previous finalized epoch:{" "}
                       {sidecarPreviousEpochId !== null ? sidecarPreviousEpochId.toString() : "none"}
                     </p>
-                    <p className="mt-1 text-xs text-white/68">
+                    <p className="mono mt-1 text-xs text-white/68">
                       Previous result:{" "}
                       {previousEpochResult?.finalized
                         ? previousEpochResult.winnerAgentId === 4
@@ -1161,11 +1173,12 @@ export function ArenaBattleClient() {
                       type="button"
                       onClick={() => void submitClaim()}
                       disabled={claimableEpochId === null || claimBusy || claimConfirming || wrongChain || !isConnected}
-                      className="mt-3 rounded-xl border border-emerald-300/35 bg-emerald-300/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="btn-phonk mt-3 disabled:cursor-not-allowed disabled:opacity-45"
+                      style={{ ["--agent-color" as string]: "var(--glitch)" } as CSSProperties}
                     >
                       {claimableEpochId ? `Claim Epoch ${claimableEpochId.toString()}` : "No Claim Available"}
                     </button>
-                    {claimTxHash ? <p className="mt-2 text-xs text-white/76">Claim tx: {claimTxHash}</p> : null}
+                    {claimTxHash ? <p className="mono mt-2 text-xs text-white/76">Claim tx: {claimTxHash}</p> : null}
                     {claimBusy || claimConfirming ? (
                       <p className="mt-2 text-xs text-white/72">
                         {claimConfirming ? "Waiting for claim confirmation..." : "Submitting claim..."}
@@ -1191,13 +1204,13 @@ export function ArenaBattleClient() {
         </div>
       </section>
 
-      <section className="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(7,10,18,0.95),rgba(5,7,14,0.98))] p-4">
+      <section className="panel-shell rounded-[1.8rem] p-4">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/46">Recent Clips</p>
-            <h3 className="mt-2 font-display text-xl uppercase tracking-[0.1em] text-white">Arena History</h3>
+            <p className="stat-label">Recent Clips</p>
+            <h3 className="agent-name mt-2 text-[1.8rem]">Arena History</h3>
           </div>
-          <p className="text-xs uppercase tracking-[0.16em] text-white/50">
+          <p className="agent-role text-xs text-white/50">
             {snapshot.status === "LIVE" ? `${snapshot.listeners} listeners in the room` : "Waiting for listeners"}
           </p>
         </div>
@@ -1207,16 +1220,16 @@ export function ArenaBattleClient() {
         ) : (
           <ul className="mt-4 space-y-3">
             {snapshot.clipHistory.map((item) => (
-              <li key={item.clipId} className="rounded-xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-white/82">
+              <li key={item.clipId} className="data-chip rounded-[6px] px-4 py-3 text-sm text-white/82">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-display uppercase tracking-[0.12em] text-white">
+                  <p className="agent-name text-[1.2rem]">
                     {shortTime(item.startedAt)} | {item.agentPersona} | {item.tokenSymbol}
                   </p>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/56">
+                  <p className="mono text-[11px] uppercase tracking-[0.14em] text-white/56">
                     score {item.liveScore.toFixed(1)} | bpm {item.bpm.toFixed(1)}
                   </p>
                 </div>
-                <p className="mt-2 text-xs leading-5 text-white/66">{item.note}</p>
+                <p className="subtitle mt-2 text-xs leading-5 text-white/66">{item.note}</p>
               </li>
             ))}
           </ul>

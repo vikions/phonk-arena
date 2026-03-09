@@ -58,8 +58,13 @@ function AmbientAudioToggle() {
       type="button"
       onClick={audio.toggleSound}
       aria-pressed={audio.soundEnabled}
-      className="pointer-events-auto fixed bottom-4 right-4 z-[70] inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/55 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/90 backdrop-blur-md transition hover:border-cyan-300/75 hover:bg-black/70"
+      className="sound-badge pointer-events-auto fixed bottom-4 right-4 z-[70] transition hover:border-white/20 hover:bg-black/90"
     >
+      <span className="inline-flex items-end gap-[2px]" aria-hidden="true">
+        <span className="sound-icon-bar" />
+        <span className="sound-icon-bar" />
+        <span className="sound-icon-bar" />
+      </span>
       <SoundIcon enabled={audio.soundEnabled} />
       <span>
         Sound: {audio.soundEnabled ? "ON" : "OFF"}

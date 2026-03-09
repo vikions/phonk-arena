@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { usePublicClient } from "wagmi";
 
 import { useArenaAudio } from "@/components/ArenaAudioProvider";
@@ -460,17 +460,17 @@ export function ArenaFoyerClient() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 lg:h-full lg:overflow-hidden">
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(7,8,16,0.96),rgba(10,18,34,0.9))] px-5 py-6 shadow-[0_20px_80px_rgba(0,0,0,0.45)] sm:px-7 sm:py-7">
+      <section className="panel-shell relative overflow-hidden rounded-[1.8rem] px-5 py-6 sm:px-7 sm:py-7">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(192,38,211,0.14),transparent_42%),radial-gradient(circle_at_85%_18%,rgba(34,211,238,0.16),transparent_30%),radial-gradient(circle_at_18%_90%,rgba(244,63,94,0.14),transparent_28%)]" />
         <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:36px_36px]" />
 
         <div className="relative">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-4xl">
-              <h1 className="font-display text-3xl uppercase tracking-[0.12em] text-white sm:text-4xl xl:text-[2.8rem]">
+              <h1 className="section-title text-white">
                 Let The Loudest Token Survive
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/72 sm:text-base">
+              <p className="subtitle mt-3 max-w-3xl text-sm leading-6 text-white/72 sm:text-base">
                 Ink tokens hit different when four evolving agents get involved. Every cycle they mutate, seize a new
                 pick, and drag it toward the floor where only one signal gets to look strong.
               </p>
@@ -479,14 +479,14 @@ export function ArenaFoyerClient() {
             <div className="flex flex-col items-start gap-3 xl:items-end">
               <Link
                 href="/lobby/drift-hard"
-                className="arena-pulse inline-flex rounded-full border border-cyan-300/60 bg-cyan-300/18 px-5 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100 transition hover:bg-cyan-300/28 sm:text-sm"
+                className="btn-battle arena-pulse inline-flex"
               >
                 Enter Battle Platform
               </Link>
-              <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-white/62 xl:justify-end">
-                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">4 Agents</span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Daily Mutation</span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">Fresh Ink Picks</span>
+              <div className="flex flex-wrap gap-2 xl:justify-end">
+                <span className="feature-badge">4 Agents</span>
+                <span className="feature-badge">Daily Mutation</span>
+                <span className="feature-badge">Fresh Ink Picks</span>
               </div>
             </div>
           </div>
@@ -508,11 +508,14 @@ export function ArenaFoyerClient() {
           return (
             <article
               key={agent.agentId}
-              className="arena-rise group relative h-[23.5rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(6,8,16,0.95),rgba(5,8,14,0.98))] shadow-[0_16px_50px_rgba(0,0,0,0.45)] xl:h-[24rem] 2xl:h-[24.5rem]"
-              style={{
-                animationDelay: `${index * 120}ms`,
-                boxShadow: `0 18px 50px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.04), 0 0 42px ${agent.aura}`,
-              }}
+              className="agent-card arena-rise group h-[23.5rem] xl:h-[24rem] 2xl:h-[24.5rem]"
+              style={
+                {
+                  "--agent-color": agent.accent,
+                  animationDelay: `${index * 120}ms`,
+                  boxShadow: `0 18px 50px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.04), 0 0 42px ${agent.aura}`,
+                } as CSSProperties
+              }
             >
               <div className="absolute inset-0 overflow-hidden">
                 <Image
@@ -540,45 +543,41 @@ export function ArenaFoyerClient() {
 
               <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4">
                 <div>
-                  <h2 className="font-display text-3xl uppercase tracking-[0.12em] text-white">{agent.name}</h2>
-                  <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-white/62">{agent.role}</p>
+                  <h2 className="agent-name text-white">{agent.name}</h2>
+                  <p className="agent-role mt-1">{agent.role}</p>
                 </div>
-                <span
-                  className="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/90 backdrop-blur-md"
-                  style={{
-                    borderColor: `${agent.accent}80`,
-                    backgroundColor: `${agent.accent}25`,
-                  }}
-                >
-                  Live Signal
-                </span>
+                <span className="live-badge backdrop-blur-md">Live Signal</span>
               </div>
 
               <div className="absolute inset-x-0 bottom-0 z-10 p-4">
-                <div className="rounded-[1.35rem] border border-white/10 bg-black/42 p-4 backdrop-blur-md">
+                <div className="rounded-[1.1rem] border border-white/10 bg-[rgba(6,8,12,0.78)] p-4 backdrop-blur-md">
                   <div className="flex items-end justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-[10px] uppercase tracking-[0.24em] text-white/46">Held Today</p>
+                      <p className="stat-label">Held Today</p>
                       <p
                         title={state.token?.symbol ?? undefined}
-                        className="overflow-hidden text-ellipsis whitespace-nowrap font-display text-[clamp(0.98rem,0.82vw+0.78rem,1.28rem)] uppercase leading-none tracking-[0.05em] text-white"
+                        className="agent-name mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-[clamp(1.1rem,0.82vw+0.82rem,1.55rem)]"
                       >
                         {state.token?.symbol ?? (loading ? "SYNCING" : "NO PICK")}
                       </p>
                     </div>
-                    <div className="text-right font-mono text-[11px] uppercase tracking-[0.16em] text-white/56">
+                    <div className="mono text-right text-[11px] uppercase tracking-[0.16em] text-white/56">
                       <p>{state.strategy}</p>
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-[11px] text-white/84">
-                    <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">Record</p>
-                      <p>{state.wins}W / {state.losses}L</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="data-chip rounded-[6px] px-3 py-2">
+                      <p className="stat-label">Record</p>
+                      <p className="stat-value mt-1">
+                        {state.wins}W / {state.losses}L
+                      </p>
                     </div>
-                    <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">24h Move</p>
-                      <p className={state.token && state.token.priceChange24h > 0 ? "text-emerald-300" : "text-red-300"}>
+                    <div className="data-chip rounded-[6px] px-3 py-2">
+                      <p className="stat-label">24h Move</p>
+                      <p
+                        className={`stat-value mt-1 ${state.token && state.token.priceChange24h > 0 ? "positive" : "negative"}`}
+                      >
                         {state.token ? formatPercent(state.token.priceChange24h) : "--"}
                       </p>
                     </div>
@@ -588,7 +587,7 @@ export function ArenaFoyerClient() {
                     type="button"
                     onClick={() => void togglePreview(agent)}
                     disabled={!state.token || isPreviewLoading}
-                    className="mt-3 inline-flex w-full items-center justify-center rounded-[1rem] border border-white/15 bg-white/7 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/90 transition hover:border-white/30 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="btn-phonk mt-3 inline-flex items-center justify-center"
                   >
                     {isPreviewLoading
                       ? "Building Today's Phonk..."
@@ -598,7 +597,7 @@ export function ArenaFoyerClient() {
                   </button>
 
                   <div className="mt-3 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-white/58">
-                    <span className="font-mono">BPM {state.dna.bpmRange}</span>
+                    <span className="bpm mono">BPM {state.dna.bpmRange}</span>
                     {state.token?.pairUrl ? (
                       <Link
                         href={state.token.pairUrl}

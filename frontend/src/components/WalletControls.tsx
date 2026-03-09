@@ -67,7 +67,7 @@ export function WalletControls() {
       <div className="flex flex-col items-end gap-2 text-xs text-red-100">
         <button
           type="button"
-          className="rounded-full border border-cyan-300/50 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="btn-connect disabled:cursor-not-allowed disabled:opacity-60"
           disabled={!injectedConnector || isPending}
           onClick={() => {
             if (!injectedConnector) {
@@ -88,7 +88,7 @@ export function WalletControls() {
       <div className="flex items-center gap-3">
         <button
           type="button"
-          className="rounded-full border border-amber-300/60 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/25 disabled:opacity-60"
+          className="rounded-[4px] border border-[var(--oracle)]/60 bg-[color-mix(in_srgb,var(--oracle)_12%,transparent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--oracle)] transition hover:bg-[color-mix(in_srgb,var(--oracle)_18%,transparent)] disabled:opacity-60"
           onClick={() => {
             void ensureInkNetwork(walletClient).catch(() => {
               switchChain({ chainId: INK_MAINNET_CHAIN_ID });
@@ -100,7 +100,7 @@ export function WalletControls() {
         </button>
         <button
           type="button"
-          className="rounded-full border border-white/20 px-3 py-2 text-sm text-white/80 transition hover:border-white/40"
+          className="btn-disconnect"
           onClick={() => disconnect()}
         >
           Disconnect
@@ -111,12 +111,12 @@ export function WalletControls() {
 
   return (
     <div className="flex items-center gap-3">
-      <div className="rounded-full border border-cyan-300/50 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100">
+      <div className="wallet-address">
         {address ? shortAddress(address) : "Connected"}
       </div>
       <button
         type="button"
-        className="rounded-full border border-white/20 px-3 py-2 text-sm text-white/80 transition hover:border-white/40"
+        className="btn-disconnect"
         onClick={() => disconnect()}
       >
         Disconnect
