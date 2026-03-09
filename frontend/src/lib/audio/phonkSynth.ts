@@ -14,6 +14,7 @@ interface RenderPhonkClipInput {
   agentId: AgentId;
   strategy: AgentStrategy;
   agentPersona?: "RAGE" | "GHOST" | "ORACLE" | "GLITCH";
+  quality?: "full" | "preview";
 }
 
 interface SoundManifest {
@@ -647,7 +648,7 @@ async function getSoundManifest(): Promise<SoundManifest> {
 
   manifestPromise = (async () => {
     try {
-      const response = await fetch("/api/sounds", { cache: "no-store" });
+      const response = await fetch("/api/sounds", { cache: "force-cache" });
       if (!response.ok) {
         return EMPTY_MANIFEST;
       }
@@ -678,7 +679,7 @@ async function getSampleData(url: string): Promise<ArrayBuffer | null> {
 
   const loader = (async () => {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { cache: "force-cache" });
       if (!response.ok) {
         return null;
       }
@@ -938,6 +939,7 @@ export async function renderPhonkClip({
   agentId,
   strategy,
   agentPersona,
+  quality = "full",
 }: RenderPhonkClipInput): Promise<AudioBuffer> {
   const drive = clamp(intensity, 0, 1);
   const mutation = clamp(mutationLevel ?? 0.5, 0, 1);
@@ -970,7 +972,8 @@ export async function renderPhonkClip({
 
   const grooveBpm = clamp(targetBpm * (style === "HARD" ? 0.78 : 0.74), 72, 126);
 
-  const sampleRate = 44_100;
+  const isPreviewQuality = quality === "preview";
+  const sampleRate = isPreviewQuality ? 32_000 : 44_100;
   const totalFrames = Math.max(1, Math.floor(sampleRate * durationSec));
   const context = new OfflineAudioContext(2, totalFrames, sampleRate);
 
@@ -979,15 +982,15 @@ export async function renderPhonkClip({
 
   const [kickPool, snarePool, hatPool, bassPool, cowbellPool, melodyLoopPool, voicePool, melodyAtmosPool, fxPool] =
     await Promise.all([
-      buildPool(context, manifest.kicks, "kicks", style, profile, seededRand, mutation, 6),
-      buildPool(context, manifest.snares, "snares", style, profile, seededRand, mutation, 6),
-      buildPool(context, manifest.hats, "hats", style, profile, seededRand, mutation, 6),
-      buildPool(context, manifest.bass, "bass", style, profile, seededRand, mutation, 4),
-      buildPool(context, melodyBuckets.cowbells, "melodies", style, profile, seededRand, mutation, 6),
-      buildPool(context, melodyBuckets.loops, "melodies", style, profile, seededRand, mutation, 3),
-      buildPool(context, melodyBuckets.voices, "melodies", style, profile, seededRand, mutation, 6),
-      buildPool(context, melodyBuckets.atmos, "melodies", style, profile, seededRand, mutation, 3),
-      buildPool(context, manifest.fx, "fx", style, profile, seededRand, mutation, 4),
+      buildPool(context, manifest.kicks, "kicks", style, profile, seededRand, mutation, isPreviewQuality ? 3 : 6),
+      buildPool(context, manifest.snares, "snares", style, profile, seededRand, mutation, isPreviewQuality ? 3 : 6),
+      buildPool(context, manifest.hats, "hats", style, profile, seededRand, mutation, isPreviewQuality ? 3 : 6),
+      buildPool(context, manifest.bass, "bass", style, profile, seededRand, mutation, isPreviewQuality ? 2 : 4),
+      buildPool(context, melodyBuckets.cowbells, "melodies", style, profile, seededRand, mutation, isPreviewQuality ? 3 : 6),
+      buildPool(context, melodyBuckets.loops, "melodies", style, profile, seededRand, mutation, isPreviewQuality ? 1 : 3),
+      buildPool(context, melodyBuckets.voices, "melodies", style, profile, seededRand, mutation, isPreviewQuality ? 2 : 6),
+      buildPool(context, melodyBuckets.atmos, "melodies", style, profile, seededRand, mutation, isPreviewQuality ? 1 : 3),
+      buildPool(context, manifest.fx, "fx", style, profile, seededRand, mutation, isPreviewQuality ? 2 : 4),
     ]);
 
   const master = context.createGain();
@@ -999,7 +1002,7 @@ export async function renderPhonkClip({
 
   const waveshaper = context.createWaveShaper();
   waveshaper.curve = createDistortionCurve(35 + distortionAmount * 205 + (style === "HARD" ? 35 : 0));
-  waveshaper.oversample = "4x";
+  waveshaper.oversample = isPreviewQuality ? "2x" : "4x";
 
   const compressor = context.createDynamicsCompressor();
   compressor.threshold.value = -30 + drive * 4;
@@ -1359,4 +1362,8 @@ export async function renderPhonkClip({
   }
 
   return context.startRendering();
+}
+
+export async function preloadPhonkResources(): Promise<void> {
+  await getSoundManifest();
 }

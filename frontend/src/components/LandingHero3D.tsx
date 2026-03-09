@@ -289,6 +289,8 @@ export function LandingHero3D() {
   }, []);
 
   useEffect(() => {
+    void fetch("/models/matryoshka.glb", { cache: "force-cache" }).catch(() => undefined);
+
     warmTimeoutRef.current = window.setTimeout(() => {
       warmArena();
     }, 160);

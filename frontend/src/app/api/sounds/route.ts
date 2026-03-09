@@ -62,7 +62,7 @@ export async function GET() {
 
   return NextResponse.json(manifest, {
     headers: {
-      "Cache-Control": "no-store",
+      "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
     },
   });
 }

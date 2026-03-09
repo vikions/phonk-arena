@@ -251,10 +251,12 @@ p,
   }
 
   .hero-eyebrow {
-    color: var(--muted);
+    color: rgba(224, 232, 240, 0.72);
     font-family: var(--font-body), sans-serif;
     font-size: 13px;
+    font-weight: 600;
     letter-spacing: 0.3em;
+    text-shadow: 0 0 14px rgba(255, 34, 68, 0.12);
     text-transform: uppercase;
   }
 

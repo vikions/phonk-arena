@@ -6,7 +6,7 @@ import { startTransition, useCallback, useEffect, useRef, useState, type CSSProp
 import { usePublicClient } from "wagmi";
 
 import { useArenaAudio } from "@/components/ArenaAudioProvider";
-import { renderPhonkClip } from "@/lib/audio/phonkSynth";
+import { preloadPhonkResources, renderPhonkClip } from "@/lib/audio/phonkSynth";
 import { getAgentDNA } from "@/lib/contract";
 import { DEFAULT_DNA } from "@/lib/musicEngine";
 import type { AgentDNA } from "@/lib/musicEngine";
@@ -183,7 +183,7 @@ function buildPreviewClipConfig(agent: AgentDisplay, token: DiscoveredInkToken, 
     lobbyId: agent.previewLobbyId,
     agentId: agent.previewAgentId,
     agentPersona: agent.name,
-    durationSec: 10,
+    durationSec: 8,
     bpm: clamp(bpm, 118, 182),
     intensity: clamp(intensity, 0.28, 0.98),
     mutationLevel: clamp(mutationNorm + priceNorm * 0.12, 0.08, 0.98),
@@ -238,7 +238,7 @@ export function ArenaFoyerClient() {
     async function loadFoyer() {
       try {
         setLoading(true);
-        void fetch("/api/sounds", { cache: "force-cache" }).catch(() => undefined);
+        void preloadPhonkResources().catch(() => undefined);
         const picksRequest = fetch("/api/epoch-battle", {
           cache: "no-store",
         });
@@ -336,7 +336,10 @@ export function ArenaFoyerClient() {
       return existing;
     }
 
-    const created = renderPhonkClip(config).catch((error) => {
+    const created = renderPhonkClip({
+      ...config,
+      quality: "preview",
+    }).catch((error) => {
       previewBufferCacheRef.current.delete(cacheKey);
       throw error;
     });
