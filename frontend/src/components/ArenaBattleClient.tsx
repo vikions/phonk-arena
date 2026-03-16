@@ -49,13 +49,42 @@ function formatCountdown(totalSeconds: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function trimTrailingZeros(value: string): string {
+  if (!value.includes(".")) {
+    return value;
+  }
+
+  return value.replace(/\.?0+$/, "");
+}
+
 function formatEth(value: bigint, fractionDigits = 4): string {
-  const asNumber = Number(formatEther(value));
+  const raw = formatEther(value);
+  const asNumber = Number(raw);
   if (!Number.isFinite(asNumber)) {
     return "0";
   }
 
-  return asNumber.toFixed(asNumber >= 1 ? Math.min(fractionDigits, 3) : fractionDigits);
+  const resolvedFractionDigits =
+    asNumber >= 1
+      ? Math.min(fractionDigits, 3)
+      : asNumber >= 0.01
+        ? fractionDigits
+        : asNumber >= 0.0001
+          ? 6
+          : 8;
+
+  const formatted = asNumber.toFixed(resolvedFractionDigits);
+  const trimmed = trimTrailingZeros(formatted);
+
+  if (trimmed !== "0") {
+    return trimmed;
+  }
+
+  if (value > 0n) {
+    return `<0.${"0".repeat(Math.max(0, resolvedFractionDigits - 1))}1`;
+  }
+
+  return "0";
 }
 
 function shortTime(timestamp: number): string {
