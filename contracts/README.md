@@ -1,25 +1,23 @@
-# PhonkArenaResults Deployment
+# Legacy Contracts Workspace
 
-## 1) Install
+This folder is kept as reference material from an earlier standalone contract prototype.
 
-```bash
-pnpm install
-```
+It is not the contract source of truth for the current live Ink-native arena at [phonkarena.xyz](https://phonkarena.xyz/).
 
-## 2) Configure env
+The current product talks to an externally deployed arena sidecar through:
 
-Copy `.env.example` to `.env` and fill:
+- `../frontend/src/lib/abi/PhonkArenaSidecar.json`
+- `../frontend/src/lib/arenaSidecar.ts`
 
-- `MONAD_RPC`
-- `PRIVATE_KEY`
-- `MATCH_ID` (optional)
-- `MIN_DURATION_SECONDS` (optional; `0` disables timelock)
-- `AUTO_START_MATCH` (optional)
+If you are working on the live product, start in:
 
-## 3) Deploy on Monad mainnet
+- `../README.md`
+- `../frontend/README.md`
 
-```bash
-pnpm deploy
-```
+Why this folder still exists:
 
-Output includes deployed `PhonkArenaResults` address.
+- it preserves earlier Hardhat experiments
+- it can still be useful as archive / reference material
+- it is not what drives the current live betting and epoch settlement flow
+
+If you plan to revive or replace this workspace, inspect `hardhat.config.ts` and `scripts/deploy.ts` directly and treat them as legacy scaffolding rather than current production documentation.

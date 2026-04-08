@@ -1,20 +1,35 @@
 # Phonk Arena Frontend
 
+This package is the current live web app behind [phonkarena.xyz](https://phonkarena.xyz/).
+
+It contains:
+
+- the 3D landing page
+- the live four-agent foyer
+- the live battle floor
+- Ink wallet connect and network switching
+- on-chain sidecar reads for pools, bets, epoch state, and claims
+- browser-side phonk rendering from sample packs
+
+## Current Product Surface
+
+Routes:
+
+- `/` landing
+- `/lobbies` foyer for `RAGE`, `GHOST`, `ORACLE`, `GLITCH`
+- `/lobby/[id]` live arena floor
+
+Primary components:
+
+- `src/components/LandingHero3D.tsx`
+- `src/components/ArenaFoyerClient.tsx`
+- `src/components/ArenaBattleClient.tsx`
+
 ## Install
 
 ```bash
 pnpm install
 ```
-
-## Environment
-
-Copy `.env.example` to `.env.local` and fill:
-
-- `NEXT_PUBLIC_INK_RPC`
-- `NEXT_PUBLIC_EPOCH_ARENA_ADDRESS`
-- `NEXT_PUBLIC_CHAIN_ID`
-- `NEXT_PUBLIC_BLOCKSCOUT_API`
-- `ADMIN_SECRET`
 
 ## Run
 
@@ -22,26 +37,72 @@ Copy `.env.example` to `.env.local` and fill:
 pnpm dev
 ```
 
-Routes:
+## Deploy
 
-- `/` landing
-- `/lobbies` three live lobby cards with independent LIVE/IDLE + listeners
-- `/lobby/[id]` continuous live battle + on-chain epoch voting
+Railway settings:
 
-API:
+- Root directory: `frontend`
+- Build command: `pnpm install && pnpm build`
+- Start command: `pnpm start`
 
-- `GET /api/match?lobbyId=...`
-- `GET /api/match?all=1`
-- `POST /api/presence/join`
-- `POST /api/presence/leave`
-- `POST /api/vote`
+## Environment
+
+Copy `.env.example` to `.env.local`.
+
+Most important variables:
+
+- `NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS`
+- `NEXT_PUBLIC_INK_RPC`
+- `DATABASE_URL`
+- `ADMIN_SECRET`
+- `ARENA_ORACLE_PRIVATE_KEY`
+- `ARENA_SYNC_BASE_URL`
+
+Additional values remain in `.env.example` for compatibility with older prototype paths, but the current live arena flow is built around `NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS`.
+
+## Main APIs
+
+- `GET /api/epoch-battle`
+- `GET /api/arena/state`
+- `POST /api/arena/presence/join`
+- `POST /api/arena/presence/leave`
+- `POST /api/admin/epoch-start`
+- `POST /api/admin/epoch-finalize`
+- `GET /api/admin/epoch-status`
+
+## Audio
+
+Sample packs live under:
+
+- `public/sounds/kicks`
+- `public/sounds/snares`
+- `public/sounds/hats`
+- `public/sounds/bass`
+- `public/sounds/fx`
+- `public/sounds/melodies`
+
+Manifest route:
+
 - `GET /api/sounds`
-- `POST /api/admin/start` (protected)
-- `POST /api/admin/reset` (protected)
 
-Audio sample pack:
+## Scheduler
 
-- Put files into `public/sounds/{kicks,snares,hats,bass,fx,melodies}`.
-- Supported extensions: `.wav`, `.mp3`, `.ogg`, `.m4a`.
-- To sync Lunatic pack from backend in one step, run:
-  `powershell -ExecutionPolicy Bypass -File frontend/scripts/sync-lunatic-to-frontend.ps1`
+Manual sync run:
+
+```bash
+pnpm arena:sync
+```
+
+The sync script calls:
+
+- `/api/admin/epoch-finalize`
+- `/api/admin/epoch-start`
+
+## Repo Note
+
+Older MVP files from earlier experiments still exist in this package, including legacy multi-lobby and epoch-arena code paths. The current live product surface is centered on:
+
+- `ArenaFoyerClient`
+- `ArenaBattleClient`
+- `arenaStore.ts`
+- `arenaSidecar.ts`
