@@ -5,7 +5,6 @@ import Link from "next/link";
 import { startTransition, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { useArenaAudio } from "@/components/ArenaAudioProvider";
-import { TractionPanel } from "@/components/TractionPanel";
 import { trackOncePerSession } from "@/lib/analytics";
 import { preloadPhonkResources, renderPhonkClip } from "@/lib/audio/phonkSynth";
 import { DEFAULT_DNA } from "@/lib/musicEngine";
@@ -496,8 +495,6 @@ export function ArenaFoyerClient() {
           {error}
         </section>
       ) : null}
-
-      <TractionPanel />
 
       <section className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-4 lg:min-h-0">
         {AGENTS.map((agent, index) => {
