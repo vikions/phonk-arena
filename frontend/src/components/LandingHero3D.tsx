@@ -12,6 +12,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import * as THREE from "three";
 
 import { HowItWorksModal } from "@/components/HowItWorksModal";
+import { trackOncePerSession } from "@/lib/analytics";
 
 const ENTER_TRANSITION_MS = 350;
 const TARGET_MODEL_HEIGHT = 2.9;
@@ -277,6 +278,13 @@ export function LandingHero3D() {
     void fetch("/api/epoch-battle", { cache: "no-store" }).catch(() => undefined);
     void fetch("/api/sounds", { cache: "force-cache" }).catch(() => undefined);
   }, [router]);
+
+  useEffect(() => {
+    void trackOncePerSession("landing_view", {
+      eventName: "landing_view",
+      path: "/",
+    });
+  }, []);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {

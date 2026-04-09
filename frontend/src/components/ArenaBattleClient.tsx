@@ -23,6 +23,7 @@ import {
   normalizeUserBet,
   placeArenaBet,
 } from "@/lib/arenaSidecar";
+import { trackEvent, trackOncePerSession } from "@/lib/analytics";
 import { renderPhonkClip } from "@/lib/audio/phonkSynth";
 import type { ArenaAgentId, ArenaBattleAgentSnapshot, ArenaBattleSnapshot } from "@/lib/arenaTypes";
 import { INK_MAINNET_CHAIN_ID } from "@/lib/inkChain";
@@ -477,6 +478,14 @@ export function ArenaBattleClient() {
   }, [fetchSnapshot, joinPresence, leavePresence]);
 
   useEffect(() => {
+    void trackOncePerSession("battle_view", {
+      eventName: "battle_view",
+      path: typeof window !== "undefined" ? window.location.pathname : "/lobby",
+      lobbyId: snapshot?.arenaId,
+    });
+  }, [snapshot?.arenaId]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const syncChainId = async () => {
@@ -510,6 +519,19 @@ export function ArenaBattleClient() {
     }
 
     setBetBusy(false);
+    if (betTxHash) {
+      void trackEvent({
+        eventName: "bet_confirmed",
+        eventKey: `bet_confirmed:${betTxHash}`,
+        txHash: betTxHash,
+        walletAddress: address,
+        path: typeof window !== "undefined" ? window.location.pathname : "/lobby",
+        lobbyId: snapshot?.arenaId,
+        metadata: {
+          epochId: String(sidecarCurrentEpochId),
+        },
+      });
+    }
     void Promise.all([
       refetchSidecarCurrentEpochId(),
       refetchCurrentEpochPool(),
@@ -518,27 +540,17 @@ export function ArenaBattleClient() {
       refetchCurrentUserBet(),
     ]);
   }, [
+    address,
     betConfirmed,
+    betTxHash,
     refetchCurrentEpochOpen,
     refetchCurrentEpochPool,
     refetchCurrentEpochResult,
     refetchCurrentUserBet,
     refetchSidecarCurrentEpochId,
+    sidecarCurrentEpochId,
+    snapshot?.arenaId,
   ]);
-
-  useEffect(() => {
-    if (!claimConfirmed) {
-      return;
-    }
-
-    setClaimBusy(false);
-    void Promise.all([
-      refetchPreviousEpochResult(),
-      refetchPreviousUserBet(),
-      refetchCurrentEpochResult(),
-      refetchCurrentEpochPool(),
-    ]);
-  }, [claimConfirmed, refetchCurrentEpochPool, refetchCurrentEpochResult, refetchPreviousEpochResult, refetchPreviousUserBet]);
 
   useEffect(() => {
     if (!claimFailed) {
@@ -548,6 +560,24 @@ export function ArenaBattleClient() {
     setClaimBusy(false);
     setClaimError(claimReceiptError instanceof Error ? claimReceiptError.message : "Claim transaction failed.");
   }, [claimFailed, claimReceiptError]);
+
+  useEffect(() => {
+    if (!betTxHash) {
+      return;
+    }
+
+    void trackEvent({
+      eventName: "bet_submitted",
+      eventKey: `bet_submitted:${betTxHash}`,
+      txHash: betTxHash,
+      walletAddress: address,
+      path: typeof window !== "undefined" ? window.location.pathname : "/lobby",
+      lobbyId: snapshot?.arenaId,
+      metadata: {
+        epochId: String(sidecarCurrentEpochId),
+      },
+    });
+  }, [address, betTxHash, sidecarCurrentEpochId, snapshot?.arenaId]);
 
   const ensureClipBuffer = useCallback((battleSnapshot: ArenaBattleSnapshot, clipId: string) => {
     const cached = clipBufferCacheRef.current.get(clipId);
@@ -754,6 +784,62 @@ export function ArenaBattleClient() {
     !previousUserBet.claimed
       ? sidecarPreviousEpochId
       : null;
+
+  useEffect(() => {
+    if (!claimConfirmed) {
+      return;
+    }
+
+    setClaimBusy(false);
+    if (claimTxHash) {
+      void trackEvent({
+        eventName: "claim_confirmed",
+        eventKey: `claim_confirmed:${claimTxHash}`,
+        txHash: claimTxHash,
+        walletAddress: address,
+        path: typeof window !== "undefined" ? window.location.pathname : "/lobby",
+        lobbyId: snapshot?.arenaId,
+        metadata: {
+          epochId: claimableEpochId !== null ? claimableEpochId.toString() : null,
+        },
+      });
+    }
+
+    void Promise.all([
+      refetchPreviousEpochResult(),
+      refetchPreviousUserBet(),
+      refetchCurrentEpochResult(),
+      refetchCurrentEpochPool(),
+    ]);
+  }, [
+    address,
+    claimConfirmed,
+    claimTxHash,
+    claimableEpochId,
+    refetchCurrentEpochPool,
+    refetchCurrentEpochResult,
+    refetchPreviousEpochResult,
+    refetchPreviousUserBet,
+    snapshot?.arenaId,
+  ]);
+
+  useEffect(() => {
+    if (!claimTxHash) {
+      return;
+    }
+
+    void trackEvent({
+      eventName: "claim_submitted",
+      eventKey: `claim_submitted:${claimTxHash}`,
+      txHash: claimTxHash,
+      walletAddress: address,
+      path: typeof window !== "undefined" ? window.location.pathname : "/lobby",
+      lobbyId: snapshot?.arenaId,
+      metadata: {
+        epochId: claimableEpochId !== null ? claimableEpochId.toString() : null,
+      },
+    });
+  }, [address, claimTxHash, claimableEpochId, snapshot?.arenaId]);
 
   const currentPlayingAgent =
     snapshot?.nowPlaying ? snapshot.agents.find((agent) => agent.agentId === snapshot.nowPlaying?.agentId) ?? null : null;

@@ -10,6 +10,7 @@ import {
   useSwitchChain,
 } from "wagmi";
 
+import { trackOncePerSession } from "@/lib/analytics";
 import { INK_MAINNET_CHAIN_ID } from "@/lib/inkChain";
 import { ensureInkNetwork, readWalletChainId } from "@/lib/walletNetwork";
 
@@ -61,6 +62,21 @@ export function WalletControls() {
 
   const resolvedChainId = walletChainId ?? chainId;
   const wrongChain = isConnected && resolvedChainId !== INK_MAINNET_CHAIN_ID;
+
+  useEffect(() => {
+    if (!isConnected || !address) {
+      return;
+    }
+
+    void trackOncePerSession(`wallet_connected:${address.toLowerCase()}`, {
+      eventName: "wallet_connected",
+      walletAddress: address,
+      path: typeof window !== "undefined" ? window.location.pathname : undefined,
+      metadata: {
+        chainId: resolvedChainId ?? null,
+      },
+    });
+  }, [address, isConnected, resolvedChainId]);
 
   if (!isConnected) {
     return (

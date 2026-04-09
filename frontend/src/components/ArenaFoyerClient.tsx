@@ -5,6 +5,8 @@ import Link from "next/link";
 import { startTransition, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { useArenaAudio } from "@/components/ArenaAudioProvider";
+import { TractionPanel } from "@/components/TractionPanel";
+import { trackOncePerSession } from "@/lib/analytics";
 import { preloadPhonkResources, renderPhonkClip } from "@/lib/audio/phonkSynth";
 import { DEFAULT_DNA } from "@/lib/musicEngine";
 import type { AgentDNA } from "@/lib/musicEngine";
@@ -209,6 +211,13 @@ export function ArenaFoyerClient() {
   const previewSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const previewRequestIdRef = useRef(0);
   const previewBufferCacheRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
+
+  useEffect(() => {
+    void trackOncePerSession("foyer_view", {
+      eventName: "foyer_view",
+      path: "/lobbies",
+    });
+  }, []);
 
   const stopPreview = useCallback(
     (resumeAmbient = true) => {
@@ -487,6 +496,8 @@ export function ArenaFoyerClient() {
           {error}
         </section>
       ) : null}
+
+      <TractionPanel />
 
       <section className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-4 lg:min-h-0">
         {AGENTS.map((agent, index) => {
