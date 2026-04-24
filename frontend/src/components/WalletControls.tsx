@@ -32,14 +32,16 @@ function NetworkSelector() {
           <button
             key={networkId}
             type="button"
-            className={`rounded-[3px] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
+            aria-pressed={selected}
+            className={`inline-flex items-center gap-1.5 rounded-[3px] border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
               selected
-                ? "bg-white/12 text-white"
-                : "text-white/52 hover:bg-white/[0.06] hover:text-white/78"
+                ? "border-[var(--ghost)] bg-[color-mix(in_srgb,var(--ghost)_22%,transparent)] text-[var(--ghost)] shadow-[0_0_18px_rgba(56,189,248,0.24)]"
+                : "border-transparent text-white/52 hover:bg-white/[0.06] hover:text-white/78"
             }`}
             onClick={() => setSelectedArenaNetworkId(networkId)}
             title={network.missingEnvNames.length > 0 ? `${network.label} env is not configured` : network.label}
           >
+            {selected ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--ghost)] shadow-[0_0_10px_var(--ghost)]" /> : null}
             {networkId === "ink" ? "Ink" : "LitVM"}
           </button>
         );

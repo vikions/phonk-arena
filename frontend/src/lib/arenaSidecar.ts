@@ -127,6 +127,10 @@ export function isArenaSidecarConfiguredForNetwork(value?: string | null): boole
   return getArenaSidecarConfigError(value) === null;
 }
 
+function getLitvmGasOverride(networkId: ArenaNetworkId, gas: bigint) {
+  return networkId === "litvm" ? { gas } : {};
+}
+
 export interface ArenaSidecarTokenSelectionView {
   tokenAddress: Address;
   tokenSymbol: string;
@@ -502,6 +506,7 @@ export async function recordArenaTokenSelection(
     address: getArenaSidecarAddress(networkId),
     abi: arenaSidecarAbi,
     functionName: "recordTokenSelection",
+    ...getLitvmGasOverride(networkId, 500_000n),
     args: [
       BigInt(input.epochId),
       BigInt(input.agentId),
@@ -525,6 +530,7 @@ export async function finalizeArenaEpoch(
     address: getArenaSidecarAddress(networkId),
     abi: arenaSidecarAbi,
     functionName: "finalizeEpoch",
+    ...getLitvmGasOverride(networkId, 900_000n),
     args: [
       BigInt(input.epochId),
       input.finalPriceUsdE8,
@@ -547,6 +553,7 @@ export async function placeArenaBet(
     address: getArenaSidecarAddress(networkId),
     abi: arenaSidecarAbi,
     functionName: "placeBet",
+    ...getLitvmGasOverride(networkId, 300_000n),
     args: [BigInt(epochId), BigInt(agentId)],
     value,
   });
@@ -561,6 +568,7 @@ export async function claimArenaEpoch(
     address: getArenaSidecarAddress(networkId),
     abi: arenaSidecarAbi,
     functionName: "claim",
+    ...getLitvmGasOverride(networkId, 300_000n),
     args: [BigInt(epochId)],
   });
 }

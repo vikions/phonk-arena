@@ -59,7 +59,7 @@ function trimTrailingZeros(value: string): string {
   return value.replace(/\.?0+$/, "");
 }
 
-function formatEth(value: bigint, fractionDigits = 4): string {
+function formatNative(value: bigint, fractionDigits = 4): string {
   const raw = formatEther(value);
   const asNumber = Number(raw);
   if (!Number.isFinite(asNumber)) {
@@ -272,6 +272,7 @@ export function ArenaBattleClient() {
   const selectedSidecarConfigError = getArenaSidecarConfigError(selectedArenaNetworkId);
   const selectedSidecarConfigured = isArenaSidecarConfiguredForNetwork(selectedArenaNetworkId);
   const selectedNetworkErrorLabel = selectedArenaNetworkId === "ink" ? "Ink mainnet" : selectedArenaNetwork.label;
+  const selectedCurrencySymbol = selectedArenaNetwork.chain.nativeCurrency.symbol;
   const wrongChain = isConnected && selectedNetworkConfigured && resolvedChainId !== selectedArenaNetwork.chainId;
 
   const { data: sidecarCurrentEpochIdRaw, refetch: refetchSidecarCurrentEpochId } = useReadContract({
@@ -1242,8 +1243,8 @@ export function ArenaBattleClient() {
               ) : (
                 <>
                   <p className="subtitle mt-3 text-sm leading-6 text-white/68">
-                    Real ETH bets now settle through the arena sidecar. Winner still comes from token performance, not crowd
-                    taste.
+                    Real {selectedCurrencySymbol} bets now settle through the arena sidecar. Winner still comes from token
+                    performance, not crowd taste.
                   </p>
 
                   <div className="data-chip mt-4 rounded-[1.4rem] p-4">
@@ -1254,7 +1255,7 @@ export function ArenaBattleClient() {
                       </p>
                     </div>
                     <p className="agent-name mt-2 text-[1.4rem]">
-                      {currentEpochPool ? `${formatEth(currentEpochPool.totalPool)} ETH` : "Loading Pool"}
+                      {currentEpochPool ? `${formatNative(currentEpochPool.totalPool)} ${selectedCurrencySymbol}` : "Loading Pool"}
                     </p>
                     <p className="agent-role mt-2 text-xs text-white/54">
                       {currentEpochOpen ? "Open For Bets" : "Betting Closed"}
@@ -1271,7 +1272,7 @@ export function ArenaBattleClient() {
 
                   <div className="mt-4 grid gap-2">
                     <label htmlFor="arena-bet-amount" className="stat-label">
-                      Bet Amount (ETH)
+                      Bet Amount ({selectedCurrencySymbol})
                     </label>
                     <input
                       id="arena-bet-amount"
@@ -1314,12 +1315,12 @@ export function ArenaBattleClient() {
                   <div className="mono mt-4 space-y-2 text-xs text-white/76">
                     <p>
                       Your current epoch bet:{" "}
-                      {currentUserBet?.exists ? `${formatEth(currentUserBet.amount)} ETH on ${snapshot.agents.find((agent) => agent.agentId === currentUserBet.agentId)?.name ?? `Agent ${currentUserBet.agentId}`}` : "No active bet"}
+                      {currentUserBet?.exists ? `${formatNative(currentUserBet.amount)} ${selectedCurrencySymbol} on ${snapshot.agents.find((agent) => agent.agentId === currentUserBet.agentId)?.name ?? `Agent ${currentUserBet.agentId}`}` : "No active bet"}
                     </p>
                     <p>
                       Pools:{" "}
                       {snapshot.agents
-                        .map((agent, index) => `${agent.name} ${formatEth(currentEpochPool?.pools[index] ?? 0n)} ETH`)
+                        .map((agent, index) => `${agent.name} ${formatNative(currentEpochPool?.pools[index] ?? 0n)} ${selectedCurrencySymbol}`)
                         .join(" | ")}
                     </p>
                     {betTxHash ? <p>Bet tx: {betTxHash}</p> : null}

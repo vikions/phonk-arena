@@ -57,7 +57,7 @@ const litvmExplorerUrl = (process.env.NEXT_PUBLIC_LITVM_EXPLORER_URL || "").trim
 export const litvmTestnet = defineChain({
   id: litvmChainId,
   name: "LitVM Testnet",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  nativeCurrency: { name: "zkLTC", symbol: "zkLTC", decimals: 18 },
   rpcUrls: {
     default: { http: litvmRpcUrl ? [litvmRpcUrl] : [] },
   },
