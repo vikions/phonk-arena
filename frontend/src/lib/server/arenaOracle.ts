@@ -3,8 +3,12 @@ import "server-only";
 import { createWalletClient, type WalletClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { inkMainnet } from "@/lib/inkChain";
-import { getInkRpcTransport } from "@/lib/inkRpc";
+import {
+  DEFAULT_ARENA_NETWORK_ID,
+  type ArenaNetworkId,
+  getArenaNetworkConfig,
+  getArenaNetworkTransport,
+} from "@/lib/arenaNetworks";
 
 export function isAdminAuthorized(request: Request): boolean {
   const secret = process.env.ADMIN_SECRET?.trim();
@@ -29,17 +33,18 @@ function getOraclePrivateKey(): `0x${string}` | null {
   return (raw.startsWith("0x") ? raw : `0x${raw}`) as `0x${string}`;
 }
 
-export function getArenaOracleWalletClient(): WalletClient {
+export function getArenaOracleWalletClient(networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID): WalletClient {
   const privateKey = getOraclePrivateKey();
   if (!privateKey) {
     throw new Error("ARENA_ORACLE_PRIVATE_KEY is not configured.");
   }
 
   const account = privateKeyToAccount(privateKey);
+  const network = getArenaNetworkConfig(networkId);
 
   return createWalletClient({
     account,
-    chain: inkMainnet,
-    transport: getInkRpcTransport(),
+    chain: network.chain,
+    transport: getArenaNetworkTransport(networkId),
   });
 }

@@ -10,12 +10,42 @@ import {
   useSwitchChain,
 } from "wagmi";
 
+import { useArenaNetwork } from "@/components/Providers";
 import { trackOncePerSession } from "@/lib/analytics";
-import { INK_MAINNET_CHAIN_ID } from "@/lib/inkChain";
-import { ensureInkNetwork, readWalletChainId } from "@/lib/walletNetwork";
+import { ARENA_NETWORK_IDS, arenaNetworks } from "@/lib/arenaNetworks";
+import { ensureArenaNetwork, readWalletChainId } from "@/lib/walletNetwork";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function NetworkSelector() {
+  const { selectedArenaNetworkId, setSelectedArenaNetworkId } = useArenaNetwork();
+
+  return (
+    <div className="flex items-center gap-1 rounded-[4px] border border-white/10 bg-white/[0.03] p-1">
+      {ARENA_NETWORK_IDS.map((networkId) => {
+        const selected = selectedArenaNetworkId === networkId;
+        const network = arenaNetworks[networkId];
+
+        return (
+          <button
+            key={networkId}
+            type="button"
+            className={`rounded-[3px] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
+              selected
+                ? "bg-white/12 text-white"
+                : "text-white/52 hover:bg-white/[0.06] hover:text-white/78"
+            }`}
+            onClick={() => setSelectedArenaNetworkId(networkId)}
+            title={network.missingEnvNames.length > 0 ? `${network.label} env is not configured` : network.label}
+          >
+            {networkId === "ink" ? "Ink" : "LitVM"}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export function WalletControls() {
@@ -26,6 +56,7 @@ export function WalletControls() {
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const [walletChainId, setWalletChainId] = useState<number | null>(null);
+  const { selectedArenaNetworkId, selectedArenaNetwork } = useArenaNetwork();
 
   const injectedConnector = useMemo(
     () => connectors.find((connector) => connector.type === "injected") ?? connectors[0],
@@ -61,7 +92,9 @@ export function WalletControls() {
   }, [isConnected, walletClient]);
 
   const resolvedChainId = walletChainId ?? chainId;
-  const wrongChain = isConnected && resolvedChainId !== INK_MAINNET_CHAIN_ID;
+  const selectedNetworkConfigured =
+    selectedArenaNetwork.missingEnvNames.length === 0 && selectedArenaNetwork.chainId > 0;
+  const wrongChain = isConnected && selectedNetworkConfigured && resolvedChainId !== selectedArenaNetwork.chainId;
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -80,7 +113,8 @@ export function WalletControls() {
 
   if (!isConnected) {
     return (
-      <div className="flex flex-col items-end gap-2 text-xs text-red-100">
+      <div className="flex flex-col items-end gap-2 text-xs text-red-100 sm:flex-row sm:items-center">
+        <NetworkSelector />
         <button
           type="button"
           className="btn-connect disabled:cursor-not-allowed disabled:opacity-60"
@@ -102,17 +136,20 @@ export function WalletControls() {
   if (wrongChain) {
     return (
       <div className="flex items-center gap-3">
+        <NetworkSelector />
         <button
           type="button"
           className="rounded-[4px] border border-[var(--oracle)]/60 bg-[color-mix(in_srgb,var(--oracle)_12%,transparent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--oracle)] transition hover:bg-[color-mix(in_srgb,var(--oracle)_18%,transparent)] disabled:opacity-60"
           onClick={() => {
-            void ensureInkNetwork(walletClient).catch(() => {
-              switchChain({ chainId: INK_MAINNET_CHAIN_ID });
+            void ensureArenaNetwork(selectedArenaNetworkId, walletClient).catch(() => {
+              if (selectedArenaNetwork.chainId > 0) {
+                switchChain({ chainId: selectedArenaNetwork.chainId });
+              }
             });
           }}
           disabled={isSwitching}
         >
-          {isSwitching ? "Switching..." : "Switch to Ink"}
+          {isSwitching ? "Switching..." : `Switch to ${selectedArenaNetwork.label}`}
         </button>
         <button
           type="button"
@@ -127,6 +164,7 @@ export function WalletControls() {
 
   return (
     <div className="flex items-center gap-3">
+      <NetworkSelector />
       <div className="wallet-address">
         {address ? shortAddress(address) : "Connected"}
       </div>

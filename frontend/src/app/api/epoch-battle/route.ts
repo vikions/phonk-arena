@@ -1,15 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { getArenaSidecarCurrentEpochId } from "@/lib/arenaSidecar";
+import { getArenaNetworkId } from "@/lib/arenaNetworks";
 import { getAgentRuntimeProfiles } from "@/lib/server/agentProfileStore";
 import { getAgentTokenPicksForEpoch, getDiscoveryDailySeed } from "@/lib/server/tokenDiscovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const currentEpochId = await getArenaSidecarCurrentEpochId();
+    const networkId = getArenaNetworkId(request.nextUrl.searchParams.get("chain"));
+    const currentEpochId = await getArenaSidecarCurrentEpochId(undefined, networkId);
     const fallbackEpochId = getDiscoveryDailySeed();
     const epochId = Number(currentEpochId ?? BigInt(fallbackEpochId));
     const [picks, profiles] = await Promise.all([

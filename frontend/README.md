@@ -53,12 +53,19 @@ Most important variables:
 
 - `NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS`
 - `NEXT_PUBLIC_INK_RPC`
+- `NEXT_PUBLIC_LITVM_RPC`
+- `NEXT_PUBLIC_LITVM_CHAIN_ID`
+- `NEXT_PUBLIC_LITVM_EXPLORER_URL`
+- `NEXT_PUBLIC_LITVM_ARENA_SIDECAR_ADDRESS`
 - `DATABASE_URL`
 - `ADMIN_SECRET`
 - `ARENA_ORACLE_PRIVATE_KEY`
 - `ARENA_SYNC_BASE_URL`
+- `ARENA_SYNC_CHAIN`
 
 Additional values remain in `.env.example` for compatibility with older prototype paths, but the current live arena flow is built around `NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS`.
+
+LitVM Testnet mode is enabled only when all LitVM network values and `NEXT_PUBLIC_LITVM_ARENA_SIDECAR_ADDRESS` are set. Ink remains the default network when no selection is stored.
 
 ## Main APIs
 

@@ -172,6 +172,7 @@ pnpm arena:sync
 
 - Ink mainnet
 - chain id `57073`
+- LitVM Testnet can be enabled as a second arena network when its env values and sidecar deployment address are configured.
 
 ## Repository Layout
 
@@ -211,15 +212,35 @@ Most important variables right now:
 
 - `NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS`: current live sidecar address
 - `NEXT_PUBLIC_INK_RPC`: Ink RPC endpoint
+- `NEXT_PUBLIC_LITVM_RPC`: LitVM Testnet RPC endpoint
+- `NEXT_PUBLIC_LITVM_CHAIN_ID`: LitVM Testnet chain id
+- `NEXT_PUBLIC_LITVM_EXPLORER_URL`: LitVM Testnet explorer URL
+- `NEXT_PUBLIC_LITVM_ARENA_SIDECAR_ADDRESS`: LitVM Testnet sidecar address
 - `DATABASE_URL`: enables persistent holder snapshots and agent mutation history
 - `ADMIN_SECRET`: protects admin routes
 - `ARENA_ORACLE_PRIVATE_KEY`: wallet used by the sync worker to record selections and finalize epochs
 - `ARENA_SYNC_BASE_URL`: base URL for the sync script / cron runner
+- `ARENA_SYNC_CHAIN`: optional admin sync target, `ink` or `litvm`; defaults to `ink`
 
 Notes:
 
 - Without `DATABASE_URL`, the app still boots, but agent progression falls back to in-memory defaults.
 - Without `NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS`, the live arena UI still renders, but real on-chain pool and claim flow will be unavailable.
+- Without the LitVM env values, LitVM mode remains selectable but real LitVM on-chain reads, bets, and claims stay disabled.
+
+## LitVM Testnet Deployment
+
+LitVM support is additive. The existing Ink address and flow stay unchanged.
+
+Deploy the same sidecar artifact to LitVM from the legacy Hardhat workspace:
+
+```bash
+cd contracts
+pnpm install
+LITVM_RPC=<litvm-rpc> LITVM_CHAIN_ID=<litvm-chain-id> PRIVATE_KEY=<deployer-key> pnpm deploy:litvm
+```
+
+The deploy command reads `frontend/src/lib/abi/PhonkArenaSidecar.json`, deploys it with `ARENA_EPOCH_DURATION_SECONDS` defaulting to `86400`, and prints the new LitVM sidecar address. Set that address as `NEXT_PUBLIC_LITVM_ARENA_SIDECAR_ADDRESS` in the frontend environment before rebuilding.
 
 ## Audio Packs
 

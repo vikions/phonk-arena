@@ -2,8 +2,16 @@ import type { Abi, Address, PublicClient, WalletClient } from "viem";
 import { createPublicClient, getAddress, isAddress } from "viem";
 
 import phonkArenaSidecarAbiJson from "@/lib/abi/PhonkArenaSidecar.json";
-import { inkMainnet } from "@/lib/inkChain";
-import { DEFAULT_INK_RPC_URL, getInkRpcTransport, getInkRpcUrl } from "@/lib/inkRpc";
+import {
+  DEFAULT_ARENA_NETWORK_ID,
+  type ArenaNetworkId,
+  arenaNetworks,
+  getArenaNetworkConfig,
+  getArenaNetworkId,
+  getArenaNetworkTransport,
+  isArenaNetworkConfigured,
+} from "@/lib/arenaNetworks";
+import { DEFAULT_INK_RPC_URL, getInkRpcUrl } from "@/lib/inkRpc";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const DEFAULT_ARENA_SIDECAR_ADDRESS = "0xa21bbff7b8aD238F58B825e77191617568D0E809";
@@ -17,14 +25,16 @@ function normalizeAddress(value: string | undefined): Address | null {
   return getAddress(trimmed);
 }
 
-function getReadonlyClient(publicClient?: PublicClient): PublicClient {
+function getReadonlyClient(publicClient?: PublicClient, networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID): PublicClient {
   if (publicClient) {
     return publicClient;
   }
 
+  const network = getArenaNetworkConfig(networkId);
+
   return createPublicClient({
-    chain: inkMainnet,
-    transport: getInkRpcTransport(),
+    chain: network.chain,
+    transport: getArenaNetworkTransport(networkId),
   });
 }
 
@@ -78,6 +88,44 @@ export const arenaSidecarAddress = (normalizeAddress(process.env.NEXT_PUBLIC_ARE
   normalizeAddress(DEFAULT_ARENA_SIDECAR_ADDRESS) ??
   ZERO_ADDRESS) as Address;
 export const isArenaSidecarConfigured = arenaSidecarAddress !== ZERO_ADDRESS && arenaSidecarAbi.length > 0;
+
+export function getArenaSidecarAddress(value?: string | null): Address {
+  const networkId = getArenaNetworkId(value);
+
+  if (networkId === "ink") {
+    return arenaSidecarAddress;
+  }
+
+  return (normalizeAddress(process.env.NEXT_PUBLIC_LITVM_ARENA_SIDECAR_ADDRESS) ?? ZERO_ADDRESS) as Address;
+}
+
+export function getArenaSidecarRpcUrl(value?: string | null): string {
+  const networkId = getArenaNetworkId(value);
+  return networkId === "ink" ? arenaSidecarRpcUrl : arenaNetworks[networkId].rpcUrl;
+}
+
+export function getArenaSidecarConfigError(value?: string | null): string | null {
+  const networkId = getArenaNetworkId(value);
+  const network = arenaNetworks[networkId];
+
+  if (!isArenaNetworkConfigured(networkId)) {
+    return `${network.missingEnvNames.join(", ")} ${network.missingEnvNames.length === 1 ? "is" : "are"} not configured.`;
+  }
+
+  if (getArenaSidecarAddress(networkId) === ZERO_ADDRESS) {
+    return `${network.sidecarAddressEnvName} is not configured.`;
+  }
+
+  if (arenaSidecarAbi.length === 0) {
+    return "PhonkArenaSidecar ABI is missing.";
+  }
+
+  return null;
+}
+
+export function isArenaSidecarConfiguredForNetwork(value?: string | null): boolean {
+  return getArenaSidecarConfigError(value) === null;
+}
 
 export interface ArenaSidecarTokenSelectionView {
   tokenAddress: Address;
@@ -236,14 +284,15 @@ export async function getArenaSidecarTokenSelection(
   epochId: bigint | number,
   agentId: number,
   publicClient?: PublicClient,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<ArenaSidecarTokenSelectionView | null> {
-  if (!isArenaSidecarConfigured) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     return null;
   }
 
   try {
-    const result = await getReadonlyClient(publicClient).readContract({
-      address: arenaSidecarAddress,
+    const result = await getReadonlyClient(publicClient, networkId).readContract({
+      address: getArenaSidecarAddress(networkId),
       abi: arenaSidecarAbi,
       functionName: "getEpochTokenSelection",
       args: [BigInt(epochId), BigInt(agentId)],
@@ -255,14 +304,17 @@ export async function getArenaSidecarTokenSelection(
   }
 }
 
-export async function getArenaSidecarCurrentEpochId(publicClient?: PublicClient): Promise<bigint | null> {
-  if (!isArenaSidecarConfigured) {
+export async function getArenaSidecarCurrentEpochId(
+  publicClient?: PublicClient,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
+): Promise<bigint | null> {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     return null;
   }
 
   try {
-    const result = await getReadonlyClient(publicClient).readContract({
-      address: arenaSidecarAddress,
+    const result = await getReadonlyClient(publicClient, networkId).readContract({
+      address: getArenaSidecarAddress(networkId),
       abi: arenaSidecarAbi,
       functionName: "currentEpochId",
       args: [],
@@ -277,14 +329,15 @@ export async function getArenaSidecarCurrentEpochId(publicClient?: PublicClient)
 export async function getArenaSidecarEpochEnd(
   epochId: bigint | number,
   publicClient?: PublicClient,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<bigint | null> {
-  if (!isArenaSidecarConfigured) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     return null;
   }
 
   try {
-    const result = await getReadonlyClient(publicClient).readContract({
-      address: arenaSidecarAddress,
+    const result = await getReadonlyClient(publicClient, networkId).readContract({
+      address: getArenaSidecarAddress(networkId),
       abi: arenaSidecarAbi,
       functionName: "epochEnd",
       args: [BigInt(epochId)],
@@ -299,14 +352,15 @@ export async function getArenaSidecarEpochEnd(
 export async function getArenaSidecarEpochStart(
   epochId: bigint | number,
   publicClient?: PublicClient,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<bigint | null> {
-  if (!isArenaSidecarConfigured) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     return null;
   }
 
   try {
-    const result = await getReadonlyClient(publicClient).readContract({
-      address: arenaSidecarAddress,
+    const result = await getReadonlyClient(publicClient, networkId).readContract({
+      address: getArenaSidecarAddress(networkId),
       abi: arenaSidecarAbi,
       functionName: "epochStart",
       args: [BigInt(epochId)],
@@ -321,14 +375,15 @@ export async function getArenaSidecarEpochStart(
 export async function isArenaSidecarEpochOpen(
   epochId: bigint | number,
   publicClient?: PublicClient,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<boolean | null> {
-  if (!isArenaSidecarConfigured) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     return null;
   }
 
   try {
-    const result = await getReadonlyClient(publicClient).readContract({
-      address: arenaSidecarAddress,
+    const result = await getReadonlyClient(publicClient, networkId).readContract({
+      address: getArenaSidecarAddress(networkId),
       abi: arenaSidecarAbi,
       functionName: "isEpochOpen",
       args: [BigInt(epochId)],
@@ -343,14 +398,15 @@ export async function isArenaSidecarEpochOpen(
 export async function getArenaSidecarEpochResult(
   epochId: bigint | number,
   publicClient?: PublicClient,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<ArenaSidecarEpochResultView | null> {
-  if (!isArenaSidecarConfigured) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     return null;
   }
 
   try {
-    const result = await getReadonlyClient(publicClient).readContract({
-      address: arenaSidecarAddress,
+    const result = await getReadonlyClient(publicClient, networkId).readContract({
+      address: getArenaSidecarAddress(networkId),
       abi: arenaSidecarAbi,
       functionName: "getEpochResult",
       args: [BigInt(epochId)],
@@ -365,14 +421,15 @@ export async function getArenaSidecarEpochResult(
 export async function getArenaSidecarEpochPool(
   epochId: bigint | number,
   publicClient?: PublicClient,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<ArenaSidecarEpochPoolView | null> {
-  if (!isArenaSidecarConfigured) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     return null;
   }
 
   try {
-    const result = await getReadonlyClient(publicClient).readContract({
-      address: arenaSidecarAddress,
+    const result = await getReadonlyClient(publicClient, networkId).readContract({
+      address: getArenaSidecarAddress(networkId),
       abi: arenaSidecarAbi,
       functionName: "getEpochPool",
       args: [BigInt(epochId)],
@@ -388,8 +445,9 @@ export async function getArenaSidecarUserBet(
   epochId: bigint | number,
   user: Address | string,
   publicClient?: PublicClient,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<ArenaSidecarUserBetView | null> {
-  if (!isArenaSidecarConfigured) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     return null;
   }
 
@@ -399,8 +457,8 @@ export async function getArenaSidecarUserBet(
   }
 
   try {
-    const result = await getReadonlyClient(publicClient).readContract({
-      address: arenaSidecarAddress,
+    const result = await getReadonlyClient(publicClient, networkId).readContract({
+      address: getArenaSidecarAddress(networkId),
       abi: arenaSidecarAbi,
       functionName: "getUserBet",
       args: [BigInt(epochId), normalizedUser],
@@ -436,11 +494,12 @@ export interface ArenaFinalizeEpochInput {
 export async function recordArenaTokenSelection(
   walletClient: WalletClient,
   input: ArenaRecordTokenSelectionInput,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<`0x${string}`> {
   const tokenAddress = (normalizeAddress(input.tokenAddress) ?? ZERO_ADDRESS) as Address;
 
   return (walletClient as unknown as { writeContract: (config: unknown) => Promise<`0x${string}`> }).writeContract({
-    address: arenaSidecarAddress,
+    address: getArenaSidecarAddress(networkId),
     abi: arenaSidecarAbi,
     functionName: "recordTokenSelection",
     args: [
@@ -460,9 +519,10 @@ export async function recordArenaTokenSelection(
 export async function finalizeArenaEpoch(
   walletClient: WalletClient,
   input: ArenaFinalizeEpochInput,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<`0x${string}`> {
   return (walletClient as unknown as { writeContract: (config: unknown) => Promise<`0x${string}`> }).writeContract({
-    address: arenaSidecarAddress,
+    address: getArenaSidecarAddress(networkId),
     abi: arenaSidecarAbi,
     functionName: "finalizeEpoch",
     args: [
@@ -481,9 +541,10 @@ export async function placeArenaBet(
   epochId: bigint | number,
   agentId: number,
   value: bigint,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<`0x${string}`> {
   return (walletClient as unknown as { writeContract: (config: unknown) => Promise<`0x${string}`> }).writeContract({
-    address: arenaSidecarAddress,
+    address: getArenaSidecarAddress(networkId),
     abi: arenaSidecarAbi,
     functionName: "placeBet",
     args: [BigInt(epochId), BigInt(agentId)],
@@ -494,9 +555,10 @@ export async function placeArenaBet(
 export async function claimArenaEpoch(
   walletClient: WalletClient,
   epochId: bigint | number,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<`0x${string}`> {
   return (walletClient as unknown as { writeContract: (config: unknown) => Promise<`0x${string}`> }).writeContract({
-    address: arenaSidecarAddress,
+    address: getArenaSidecarAddress(networkId),
     abi: arenaSidecarAbi,
     functionName: "claim",
     args: [BigInt(epochId)],

@@ -7,12 +7,16 @@ import {
   getArenaSidecarCurrentEpochId,
   getArenaSidecarEpochResult,
   getArenaSidecarTokenSelection,
-  isArenaSidecarConfigured,
+  isArenaSidecarConfiguredForNetwork,
   isArenaSidecarEpochOpen,
   recordArenaTokenSelection,
 } from "@/lib/arenaSidecar";
-import { inkMainnet } from "@/lib/inkChain";
-import { getInkRpcTransport } from "@/lib/inkRpc";
+import {
+  DEFAULT_ARENA_NETWORK_ID,
+  type ArenaNetworkId,
+  getArenaNetworkConfig,
+  getArenaNetworkTransport,
+} from "@/lib/arenaNetworks";
 import { applyArenaEpochProgressionIfNeeded } from "@/lib/server/agentProfileStore";
 import { getArenaOracleWalletClient } from "@/lib/server/arenaOracle";
 import { getAgentTokenPicksForEpoch, getLiveArenaTokenMetrics } from "@/lib/server/tokenDiscovery";
@@ -54,18 +58,18 @@ function toUint(value: number): bigint {
   return BigInt(Math.max(0, Math.round(value)));
 }
 
-export async function syncCurrentArenaEpochStart() {
-  if (!isArenaSidecarConfigured) {
+export async function syncCurrentArenaEpochStart(networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     throw new Error("Arena sidecar is not configured.");
   }
 
-  const currentEpochId = await getArenaSidecarCurrentEpochId();
+  const currentEpochId = await getArenaSidecarCurrentEpochId(undefined, networkId);
   if (currentEpochId === null) {
     throw new Error("Unable to read current arena epoch.");
   }
 
   const picks = await getAgentTokenPicksForEpoch(currentEpochId);
-  const walletClient = getArenaOracleWalletClient();
+  const walletClient = getArenaOracleWalletClient(networkId);
   const actions: Array<{
     agentId: number;
     action: "recorded" | "skipped";
@@ -75,7 +79,7 @@ export async function syncCurrentArenaEpochStart() {
   }> = [];
 
   for (const agentId of AGENT_IDS) {
-    const existing = await getArenaSidecarTokenSelection(currentEpochId, agentId);
+    const existing = await getArenaSidecarTokenSelection(currentEpochId, agentId, undefined, networkId);
     const pick = picks[agentId].token;
 
     if (existing?.recorded) {
@@ -103,7 +107,7 @@ export async function syncCurrentArenaEpochStart() {
         startHolderCount: toUint(pick.holderCount),
         startLiquidityUsd: toUint(pick.liquidityUsd),
         startTxCount24h: toUint(pick.txCount24h),
-      });
+      }, networkId);
 
       actions.push({
         agentId,
@@ -133,12 +137,15 @@ export async function syncCurrentArenaEpochStart() {
   };
 }
 
-export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
-  if (!isArenaSidecarConfigured) {
+export async function syncArenaEpochFinalize(
+  epochIdInput?: bigint | number,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
+) {
+  if (!isArenaSidecarConfiguredForNetwork(networkId)) {
     throw new Error("Arena sidecar is not configured.");
   }
 
-  const currentEpochId = await getArenaSidecarCurrentEpochId();
+  const currentEpochId = await getArenaSidecarCurrentEpochId(undefined, networkId);
   if (currentEpochId === null) {
     throw new Error("Unable to read current arena epoch.");
   }
@@ -150,7 +157,7 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
         ? currentEpochId - 1n
         : 0n;
 
-  const isOpen = await isArenaSidecarEpochOpen(targetEpochId);
+  const isOpen = await isArenaSidecarEpochOpen(targetEpochId, undefined, networkId);
   if (isOpen === null) {
     return {
       epochId: Number(targetEpochId),
@@ -167,7 +174,7 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
     };
   }
 
-  const existingResult = await getArenaSidecarEpochResult(targetEpochId);
+  const existingResult = await getArenaSidecarEpochResult(targetEpochId, undefined, networkId);
   if (existingResult?.finalized) {
     const progression = await applyArenaEpochProgressionIfNeeded(targetEpochId, existingResult.winnerAgentId);
     return {
@@ -182,7 +189,7 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
   const rawSelections = await Promise.all(
     AGENT_IDS.map(async (agentId) => ({
       agentId,
-      selection: await getArenaSidecarTokenSelection(targetEpochId, agentId),
+      selection: await getArenaSidecarTokenSelection(targetEpochId, agentId, undefined, networkId),
     })),
   );
   const missingAgentIds = rawSelections
@@ -228,7 +235,7 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
     finalTxCount24h[agentId] = liveTxCount24h > 0n ? liveTxCount24h : selection.startTxCount24h;
   });
 
-  const walletClient = getArenaOracleWalletClient();
+  const walletClient = getArenaOracleWalletClient(networkId);
   const txHash = await finalizeArenaEpoch(walletClient, {
     epochId: targetEpochId,
     finalPriceUsdE8,
@@ -236,7 +243,7 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
     finalHolderCount,
     finalLiquidityUsd,
     finalTxCount24h,
-  }).catch((error) => {
+  }, networkId).catch((error) => {
     if (includesErrorName(error, "EpochAlreadyFinalized")) {
       return null;
     }
@@ -262,9 +269,10 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
     | null = null;
 
   try {
+    const network = getArenaNetworkConfig(networkId);
     const publicClient = createPublicClient({
-      chain: inkMainnet,
-      transport: getInkRpcTransport(),
+      chain: network.chain,
+      transport: getArenaNetworkTransport(networkId),
     });
 
     await publicClient.waitForTransactionReceipt({
@@ -273,7 +281,7 @@ export async function syncArenaEpochFinalize(epochIdInput?: bigint | number) {
       timeout: 30_000,
     });
 
-    const finalizedResult = await getArenaSidecarEpochResult(targetEpochId, publicClient);
+    const finalizedResult = await getArenaSidecarEpochResult(targetEpochId, publicClient, networkId);
     if (finalizedResult?.finalized) {
       progression = await applyArenaEpochProgressionIfNeeded(targetEpochId, finalizedResult.winnerAgentId);
     }

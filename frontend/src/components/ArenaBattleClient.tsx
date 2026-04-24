@@ -15,19 +15,20 @@ import {
 
 import {
   arenaSidecarAbi,
-  arenaSidecarAddress,
   claimArenaEpoch,
-  isArenaSidecarConfigured,
+  getArenaSidecarAddress,
+  getArenaSidecarConfigError,
+  isArenaSidecarConfiguredForNetwork,
   normalizeEpochPool,
   normalizeEpochResult,
   normalizeUserBet,
   placeArenaBet,
 } from "@/lib/arenaSidecar";
+import { useArenaNetwork } from "@/components/Providers";
 import { trackEvent, trackOncePerSession } from "@/lib/analytics";
 import { renderPhonkClip } from "@/lib/audio/phonkSynth";
 import type { ArenaAgentId, ArenaBattleAgentSnapshot, ArenaBattleSnapshot } from "@/lib/arenaTypes";
-import { INK_MAINNET_CHAIN_ID } from "@/lib/inkChain";
-import { ensureInkNetwork, readWalletChainId } from "@/lib/walletNetwork";
+import { ensureArenaNetwork, readWalletChainId } from "@/lib/walletNetwork";
 
 interface ArenaPresenceJoinResponse {
   sessionId: string;
@@ -255,6 +256,7 @@ export function ArenaBattleClient() {
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimTxHash, setClaimTxHash] = useState<`0x${string}` | undefined>(undefined);
   const [walletChainId, setWalletChainId] = useState<number | null>(null);
+  const { selectedArenaNetworkId, selectedArenaNetwork } = useArenaNetwork();
 
   const sessionIdRef = useRef<string>(makeSessionId());
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -264,14 +266,21 @@ export function ArenaBattleClient() {
   const currentGainRef = useRef<GainNode | null>(null);
 
   const resolvedChainId = walletChainId ?? chainId;
-  const wrongChain = isConnected && resolvedChainId !== INK_MAINNET_CHAIN_ID;
+  const selectedNetworkConfigured =
+    selectedArenaNetwork.missingEnvNames.length === 0 && selectedArenaNetwork.chainId > 0;
+  const selectedSidecarAddress = getArenaSidecarAddress(selectedArenaNetworkId);
+  const selectedSidecarConfigError = getArenaSidecarConfigError(selectedArenaNetworkId);
+  const selectedSidecarConfigured = isArenaSidecarConfiguredForNetwork(selectedArenaNetworkId);
+  const selectedNetworkErrorLabel = selectedArenaNetworkId === "ink" ? "Ink mainnet" : selectedArenaNetwork.label;
+  const wrongChain = isConnected && selectedNetworkConfigured && resolvedChainId !== selectedArenaNetwork.chainId;
 
   const { data: sidecarCurrentEpochIdRaw, refetch: refetchSidecarCurrentEpochId } = useReadContract({
-    address: arenaSidecarAddress,
+    address: selectedSidecarAddress,
     abi: arenaSidecarAbi,
     functionName: "currentEpochId",
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
-      enabled: isArenaSidecarConfigured,
+      enabled: selectedSidecarConfigured,
       refetchInterval: 5_000,
     },
   });
@@ -283,84 +292,92 @@ export function ArenaBattleClient() {
   const sidecarPreviousEpochId = sidecarCurrentEpochId > 0n ? sidecarCurrentEpochId - 1n : null;
 
   const { data: currentEpochPoolRaw, refetch: refetchCurrentEpochPool } = useReadContract({
-    address: arenaSidecarAddress,
+    address: selectedSidecarAddress,
     abi: arenaSidecarAbi,
     functionName: "getEpochPool",
     args: [sidecarCurrentEpochId],
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
-      enabled: isArenaSidecarConfigured,
+      enabled: selectedSidecarConfigured,
       refetchInterval: 5_000,
     },
   });
 
   const { data: currentEpochResultRaw, refetch: refetchCurrentEpochResult } = useReadContract({
-    address: arenaSidecarAddress,
+    address: selectedSidecarAddress,
     abi: arenaSidecarAbi,
     functionName: "getEpochResult",
     args: [sidecarCurrentEpochId],
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
-      enabled: isArenaSidecarConfigured,
+      enabled: selectedSidecarConfigured,
       refetchInterval: 5_000,
     },
   });
 
   const { data: currentEpochEndRaw } = useReadContract({
-    address: arenaSidecarAddress,
+    address: selectedSidecarAddress,
     abi: arenaSidecarAbi,
     functionName: "epochEnd",
     args: [sidecarCurrentEpochId],
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
-      enabled: isArenaSidecarConfigured,
+      enabled: selectedSidecarConfigured,
       refetchInterval: 5_000,
     },
   });
 
   const { data: currentEpochOpenRaw, refetch: refetchCurrentEpochOpen } = useReadContract({
-    address: arenaSidecarAddress,
+    address: selectedSidecarAddress,
     abi: arenaSidecarAbi,
     functionName: "isEpochOpen",
     args: [sidecarCurrentEpochId],
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
-      enabled: isArenaSidecarConfigured,
+      enabled: selectedSidecarConfigured,
       refetchInterval: 5_000,
     },
   });
 
   const { data: currentUserBetRaw, refetch: refetchCurrentUserBet } = useReadContract({
-    address: arenaSidecarAddress,
+    address: selectedSidecarAddress,
     abi: arenaSidecarAbi,
     functionName: "getUserBet",
     args: address ? [sidecarCurrentEpochId, address] : undefined,
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
-      enabled: isArenaSidecarConfigured && Boolean(address),
+      enabled: selectedSidecarConfigured && Boolean(address),
       refetchInterval: 5_000,
     },
   });
 
   const { data: previousEpochResultRaw, refetch: refetchPreviousEpochResult } = useReadContract({
-    address: arenaSidecarAddress,
+    address: selectedSidecarAddress,
     abi: arenaSidecarAbi,
     functionName: "getEpochResult",
     args: sidecarPreviousEpochId !== null ? [sidecarPreviousEpochId] : undefined,
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
-      enabled: isArenaSidecarConfigured && sidecarPreviousEpochId !== null,
+      enabled: selectedSidecarConfigured && sidecarPreviousEpochId !== null,
       refetchInterval: 5_000,
     },
   });
 
   const { data: previousUserBetRaw, refetch: refetchPreviousUserBet } = useReadContract({
-    address: arenaSidecarAddress,
+    address: selectedSidecarAddress,
     abi: arenaSidecarAbi,
     functionName: "getUserBet",
     args: address && sidecarPreviousEpochId !== null ? [sidecarPreviousEpochId, address] : undefined,
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
-      enabled: isArenaSidecarConfigured && Boolean(address) && sidecarPreviousEpochId !== null,
+      enabled: selectedSidecarConfigured && Boolean(address) && sidecarPreviousEpochId !== null,
       refetchInterval: 5_000,
     },
   });
 
   const { isLoading: betConfirming, isSuccess: betConfirmed } = useWaitForTransactionReceipt({
     hash: betTxHash,
+    chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
     query: {
       enabled: Boolean(betTxHash),
     },
@@ -369,13 +386,14 @@ export function ArenaBattleClient() {
   const { isLoading: claimConfirming, isSuccess: claimConfirmed, isError: claimFailed, error: claimReceiptError } =
     useWaitForTransactionReceipt({
       hash: claimTxHash,
+      chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
       query: {
         enabled: Boolean(claimTxHash),
       },
     });
 
   const fetchSnapshot = useCallback(async () => {
-    const response = await fetch("/api/arena/state", {
+    const response = await fetch(`/api/arena/state?chain=${selectedArenaNetworkId}`, {
       cache: "no-store",
     });
 
@@ -385,10 +403,10 @@ export function ArenaBattleClient() {
 
     const data = (await response.json()) as ArenaBattleSnapshot;
     setSnapshot(data);
-  }, []);
+  }, [selectedArenaNetworkId]);
 
   const joinPresence = useCallback(async () => {
-    const response = await fetch("/api/arena/presence/join", {
+    const response = await fetch(`/api/arena/presence/join?chain=${selectedArenaNetworkId}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -404,11 +422,10 @@ export function ArenaBattleClient() {
 
     const payload = (await response.json()) as ArenaPresenceJoinResponse;
     sessionIdRef.current = payload.sessionId;
-    setSnapshot(payload.snapshot);
-  }, []);
+  }, [selectedArenaNetworkId]);
 
   const leavePresence = useCallback(async () => {
-    await fetch("/api/arena/presence/leave", {
+    await fetch(`/api/arena/presence/leave?chain=${selectedArenaNetworkId}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -418,7 +435,7 @@ export function ArenaBattleClient() {
       }),
       keepalive: true,
     }).catch(() => undefined);
-  }, []);
+  }, [selectedArenaNetworkId]);
 
   useEffect(() => {
     let stopped = false;
@@ -461,7 +478,10 @@ export function ArenaBattleClient() {
         sessionId: sessionIdRef.current,
       });
       if (navigator.sendBeacon) {
-        navigator.sendBeacon("/api/arena/presence/leave", new Blob([payload], { type: "application/json" }));
+        navigator.sendBeacon(
+          `/api/arena/presence/leave?chain=${selectedArenaNetworkId}`,
+          new Blob([payload], { type: "application/json" }),
+        );
       }
     };
 
@@ -512,6 +532,16 @@ export function ArenaBattleClient() {
       window.clearInterval(interval);
     };
   }, [isConnected, walletClient]);
+
+  useEffect(() => {
+    setBetBusy(false);
+    setBetError(null);
+    setBetTxHash(undefined);
+    setClaimBusy(false);
+    setClaimError(null);
+    setClaimTxHash(undefined);
+    setWalletChainId(null);
+  }, [selectedArenaNetworkId]);
 
   useEffect(() => {
     if (!betConfirmed) {
@@ -849,32 +879,45 @@ export function ArenaBattleClient() {
   const leftAgents = snapshot?.agents.filter((agent) => agent.agentId === 0 || agent.agentId === 1) ?? [];
   const rightAgents = snapshot?.agents.filter((agent) => agent.agentId === 2 || agent.agentId === 3) ?? [];
 
-  const ensureWalletOnInk = useCallback(async () => {
+  const ensureWalletOnSelectedNetwork = useCallback(async () => {
+    if (!selectedNetworkConfigured) {
+      throw new Error(`${selectedArenaNetwork.label} network config is not available.`);
+    }
+
     const detectedBefore = await readWalletChainId(walletClient);
-    if (detectedBefore === INK_MAINNET_CHAIN_ID || resolvedChainId === INK_MAINNET_CHAIN_ID) {
+    if (detectedBefore === selectedArenaNetwork.chainId || resolvedChainId === selectedArenaNetwork.chainId) {
       return;
     }
 
     try {
-      await ensureInkNetwork(walletClient);
+      await ensureArenaNetwork(selectedArenaNetworkId, walletClient);
     } catch {
-      if (switchChain) {
-        switchChain({ chainId: INK_MAINNET_CHAIN_ID });
+      if (switchChain && selectedArenaNetwork.chainId > 0) {
+        switchChain({ chainId: selectedArenaNetwork.chainId });
       }
-      throw new Error("Switch wallet to Ink mainnet and retry.");
+      throw new Error(`Switch wallet to ${selectedNetworkErrorLabel} and retry.`);
     }
 
     const detectedAfter = await readWalletChainId(walletClient);
-    if (detectedAfter !== INK_MAINNET_CHAIN_ID) {
-      throw new Error("Switch wallet to Ink mainnet and retry.");
+    if (detectedAfter !== selectedArenaNetwork.chainId) {
+      throw new Error(`Switch wallet to ${selectedNetworkErrorLabel} and retry.`);
     }
 
     setWalletChainId(detectedAfter);
-  }, [resolvedChainId, switchChain, walletClient]);
+  }, [
+    resolvedChainId,
+    selectedArenaNetwork.chainId,
+    selectedArenaNetwork.label,
+    selectedArenaNetworkId,
+    selectedNetworkErrorLabel,
+    selectedNetworkConfigured,
+    switchChain,
+    walletClient,
+  ]);
 
   const submitBet = useCallback(
     async (agentId: ArenaAgentId) => {
-      if (!walletClient || !address || !isArenaSidecarConfigured || !currentEpochOpen || !hasValidBetAmount || !parsedBetWei) {
+      if (!walletClient || !address || !selectedSidecarConfigured || !currentEpochOpen || !hasValidBetAmount || !parsedBetWei) {
         return;
       }
 
@@ -887,8 +930,14 @@ export function ArenaBattleClient() {
       setBetError(null);
 
       try {
-        await ensureWalletOnInk();
-        const hash = await placeArenaBet(walletClient, sidecarCurrentEpochId, agentId, parsedBetWei);
+        await ensureWalletOnSelectedNetwork();
+        const hash = await placeArenaBet(
+          walletClient,
+          sidecarCurrentEpochId,
+          agentId,
+          parsedBetWei,
+          selectedArenaNetworkId,
+        );
         setBetTxHash(hash);
       } catch (betSubmitError) {
         setBetBusy(false);
@@ -899,16 +948,18 @@ export function ArenaBattleClient() {
       address,
       currentBetAgentId,
       currentEpochOpen,
-      ensureWalletOnInk,
+      ensureWalletOnSelectedNetwork,
       hasValidBetAmount,
       parsedBetWei,
+      selectedArenaNetworkId,
+      selectedSidecarConfigured,
       sidecarCurrentEpochId,
       walletClient,
     ],
   );
 
   const submitClaim = useCallback(async () => {
-    if (!walletClient || claimableEpochId === null || !address || !isArenaSidecarConfigured) {
+    if (!walletClient || claimableEpochId === null || !address || !selectedSidecarConfigured) {
       return;
     }
 
@@ -916,14 +967,21 @@ export function ArenaBattleClient() {
     setClaimError(null);
 
     try {
-      await ensureWalletOnInk();
-      const hash = await claimArenaEpoch(walletClient, claimableEpochId);
+      await ensureWalletOnSelectedNetwork();
+      const hash = await claimArenaEpoch(walletClient, claimableEpochId, selectedArenaNetworkId);
       setClaimTxHash(hash);
     } catch (claimSubmitError) {
       setClaimBusy(false);
       setClaimError(claimSubmitError instanceof Error ? claimSubmitError.message : "Claim transaction failed.");
     }
-  }, [address, claimableEpochId, ensureWalletOnInk, walletClient]);
+  }, [
+    address,
+    claimableEpochId,
+    ensureWalletOnSelectedNetwork,
+    selectedArenaNetworkId,
+    selectedSidecarConfigured,
+    walletClient,
+  ]);
 
   if (loading && !snapshot) {
     return <p className="text-white/75">Loading battle platform...</p>;
@@ -944,12 +1002,13 @@ export function ArenaBattleClient() {
               Four Agents. One Crown.
             </h1>
             <p className="subtitle mt-3 max-w-3xl text-sm leading-6 text-white/72 sm:text-base">
-              Crowd taste no longer decides the winner. The arena crowns whoever drives the strongest token signal on Ink:
-              price first, then volume, then live market flow.
+              Crowd taste no longer decides the winner. The arena crowns whoever drives the strongest token signal on{" "}
+              {selectedArenaNetwork.label}: price first, then volume, then live market flow.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <span className="feature-badge">{selectedArenaNetwork.label}</span>
             <span className="feature-badge">Listeners {snapshot.listeners}</span>
             <span className="feature-badge">Epoch {snapshot.currentEpoch.epochId}</span>
             <span className="feature-badge">{snapshot.currentEpoch.scoringRule}</span>
@@ -975,21 +1034,21 @@ export function ArenaBattleClient() {
         <div className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-sm text-amber-100">
           <p>Wallet is on the wrong network.</p>
           <p className="mt-1 text-xs text-amber-100/80">
-            Current chain: {resolvedChainId ?? "unknown"} | Required: {INK_MAINNET_CHAIN_ID}
+            Current chain: {resolvedChainId ?? "unknown"} | Required: {selectedArenaNetwork.chainId}
           </p>
           <button
             type="button"
             onClick={() => {
-              void ensureInkNetwork(walletClient).catch(() => {
-                if (switchChain) {
-                  switchChain({ chainId: INK_MAINNET_CHAIN_ID });
+              void ensureArenaNetwork(selectedArenaNetworkId, walletClient).catch(() => {
+                if (switchChain && selectedArenaNetwork.chainId > 0) {
+                  switchChain({ chainId: selectedArenaNetwork.chainId });
                 }
               });
             }}
             disabled={isSwitching}
             className="mt-2 rounded-lg border border-amber-300/50 px-3 py-1.5 text-xs font-semibold"
           >
-            {isSwitching ? "Switching..." : "Switch to Ink"}
+            {isSwitching ? "Switching..." : `Switch to ${selectedArenaNetwork.label}`}
           </button>
         </div>
       ) : null}
@@ -1166,15 +1225,18 @@ export function ArenaBattleClient() {
 
             <div className="panel-shell rounded-[1.8rem] p-4">
               <h3 className="agent-name text-[1.8rem]">Arena Market</h3>
-              {!isArenaSidecarConfigured ? (
+              {!selectedSidecarConfigured ? (
                 <>
                   <p className="subtitle mt-3 text-sm leading-6 text-white/68">
-                    Sidecar ABI or address is missing. Add the deployed sidecar and this panel will switch to real 4-way
-                    bets and claims.
+                    Sidecar config is missing for {selectedArenaNetwork.label}. Add the deployed sidecar and this panel
+                    will switch to real 4-way bets and claims.
                   </p>
                   <div className="data-chip mt-4 rounded-[1.4rem] p-4">
                     <p className="stat-label">Status</p>
                     <p className="agent-name mt-2 text-[1.4rem]">Sidecar Not Wired</p>
+                    {selectedSidecarConfigError ? (
+                      <p className="mono mt-2 text-xs text-white/58">{selectedSidecarConfigError}</p>
+                    ) : null}
                   </div>
                 </>
               ) : (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getArenaNetworkId } from "@/lib/arenaNetworks";
 import { isAdminAuthorized } from "@/lib/server/arenaOracle";
 import { syncCurrentArenaEpochStart } from "@/lib/server/arenaEpochSync";
 
@@ -12,7 +13,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await syncCurrentArenaEpochStart();
+    const networkId = getArenaNetworkId(request.nextUrl.searchParams.get("chain") ?? process.env.ARENA_SYNC_CHAIN);
+    const result = await syncCurrentArenaEpochStart(networkId);
 
     result.actions.forEach((entry) => {
       console.log(

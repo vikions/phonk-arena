@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getArenaNetworkId } from "@/lib/arenaNetworks";
 import { isAdminAuthorized } from "@/lib/server/arenaOracle";
 import { syncArenaEpochFinalize } from "@/lib/server/arenaEpochSync";
 
@@ -33,7 +34,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const epochId = await readRequestedEpochId(request);
-    const result = await syncArenaEpochFinalize(epochId);
+    const networkId = getArenaNetworkId(request.nextUrl.searchParams.get("chain") ?? process.env.ARENA_SYNC_CHAIN);
+    const result = await syncArenaEpochFinalize(epochId, networkId);
 
     if (result.action === "finalized") {
       console.log(

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "compile": "cross-env HARDHAT_USE_SOLCJS=true hardhat compile",
-    "deploy": "hardhat run scripts/deploy.ts --network monadMainnet"
+    "deploy": "hardhat run scripts/deploy.ts --network monadMainnet",
+    "deploy:litvm": "hardhat run scripts/deploy-sidecar.ts --network litvmTestnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

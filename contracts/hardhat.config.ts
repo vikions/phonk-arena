@@ -10,6 +10,7 @@ const formattedPrivateKey = privateKey
     ? privateKey
     : `0x${privateKey}`
   : "";
+const litvmChainId = Number(process.env.LITVM_CHAIN_ID ?? "0");
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -26,6 +27,11 @@ const config: HardhatUserConfig = {
     monadMainnet: {
       url: process.env.MONAD_RPC ?? "",
       chainId: 143,
+      accounts: formattedPrivateKey ? [formattedPrivateKey] : [],
+    },
+    litvmTestnet: {
+      url: process.env.LITVM_RPC ?? "",
+      chainId: Number.isFinite(litvmChainId) && litvmChainId > 0 ? litvmChainId : 0,
       accounts: formattedPrivateKey ? [formattedPrivateKey] : [],
     },
   },

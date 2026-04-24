@@ -1,9 +1,8 @@
 import type { WalletClient } from "viem";
 
+import { type ArenaNetworkId, arenaNetworks, getArenaNetworkId } from "@/lib/arenaNetworks";
 import {
   INK_MAINNET_CHAIN_ID,
-  INK_MAINNET_CHAIN_ID_HEX,
-  inkMainnetWalletAddParams,
 } from "@/lib/inkChain";
 
 const UNKNOWN_CHAIN_CODE = 4902;
@@ -79,7 +78,18 @@ function hasUnknownChainMessage(error: unknown): boolean {
   );
 }
 
-export async function ensureInkNetwork(walletClient?: WalletClient | null): Promise<void> {
+export async function ensureArenaNetwork(
+  networkIdInput: ArenaNetworkId | string | null | undefined,
+  walletClient?: WalletClient | null,
+): Promise<void> {
+  const networkId = getArenaNetworkId(networkIdInput);
+  const network = arenaNetworks[networkId];
+  const networkErrorLabel = networkId === "ink" ? "Ink mainnet" : network.label;
+
+  if (network.missingEnvNames.length > 0 || network.chainId <= 0 || network.walletAddParams.rpcUrls.length === 0) {
+    throw new Error(`${network.label} network config is not available.`);
+  }
+
   const requester = getRequester(walletClient);
   if (!requester) {
     throw new Error("Wallet provider not available.");
@@ -90,14 +100,14 @@ export async function ensureInkNetwork(walletClient?: WalletClient | null): Prom
     .then((value) => parseHexChainId(value))
     .catch(() => null);
 
-  if (currentChain === INK_MAINNET_CHAIN_ID) {
+  if (currentChain === network.chainId) {
     return;
   }
 
   try {
     await requester.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: INK_MAINNET_CHAIN_ID_HEX }],
+      params: [{ chainId: network.chainIdHex }],
     });
   } catch (switchError) {
     const code = getErrorCode(switchError);
@@ -111,20 +121,20 @@ export async function ensureInkNetwork(walletClient?: WalletClient | null): Prom
       method: "wallet_addEthereumChain",
       params: [
         {
-          chainId: inkMainnetWalletAddParams.chainId,
-          chainName: inkMainnetWalletAddParams.chainName,
+          chainId: network.walletAddParams.chainId,
+          chainName: network.walletAddParams.chainName,
           nativeCurrency: {
-            ...inkMainnetWalletAddParams.nativeCurrency,
+            ...network.walletAddParams.nativeCurrency,
           },
-          rpcUrls: [...inkMainnetWalletAddParams.rpcUrls],
-          blockExplorerUrls: [...inkMainnetWalletAddParams.blockExplorerUrls],
+          rpcUrls: [...network.walletAddParams.rpcUrls],
+          blockExplorerUrls: [...network.walletAddParams.blockExplorerUrls],
         },
       ],
     });
 
     await requester.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: INK_MAINNET_CHAIN_ID_HEX }],
+      params: [{ chainId: network.chainIdHex }],
     });
   }
 
@@ -133,9 +143,13 @@ export async function ensureInkNetwork(walletClient?: WalletClient | null): Prom
     .then((value) => parseHexChainId(value))
     .catch(() => null);
 
-  if (finalChain !== INK_MAINNET_CHAIN_ID) {
-    throw new Error("Wallet is not on Ink mainnet.");
+  if (finalChain !== network.chainId) {
+    throw new Error(`Wallet is not on ${networkErrorLabel}.`);
   }
+}
+
+export async function ensureInkNetwork(walletClient?: WalletClient | null): Promise<void> {
+  return ensureArenaNetwork("ink", walletClient);
 }
 
 export async function readWalletChainId(walletClient?: WalletClient | null): Promise<number | null> {
@@ -156,4 +170,8 @@ export async function readWalletChainId(walletClient?: WalletClient | null): Pro
 
 export function isInkChain(chainId: number | undefined): boolean {
   return chainId === INK_MAINNET_CHAIN_ID;
+}
+
+export function isArenaChain(chainId: number | undefined, networkIdInput?: ArenaNetworkId | string | null): boolean {
+  return chainId === arenaNetworks[getArenaNetworkId(networkIdInput)].chainId;
 }

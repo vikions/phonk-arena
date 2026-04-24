@@ -5,6 +5,7 @@ import Link from "next/link";
 import { startTransition, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { useArenaAudio } from "@/components/ArenaAudioProvider";
+import { useArenaNetwork } from "@/components/Providers";
 import { trackOncePerSession } from "@/lib/analytics";
 import { preloadPhonkResources, renderPhonkClip } from "@/lib/audio/phonkSynth";
 import { DEFAULT_DNA } from "@/lib/musicEngine";
@@ -194,6 +195,7 @@ function buildPreviewClipConfig(agent: AgentDisplay, token: DiscoveredInkToken, 
 
 export function ArenaFoyerClient() {
   const { setPreviewSuppressed } = useArenaAudio();
+  const { selectedArenaNetworkId } = useArenaNetwork();
   const [agentState, setAgentState] = useState<Record<ArenaAgentId, AgentFoyerState>>({
     0: defaultAgentState(0),
     1: defaultAgentState(1),
@@ -244,7 +246,7 @@ export function ArenaFoyerClient() {
       try {
         setLoading(true);
         void preloadPhonkResources().catch(() => undefined);
-        const picksRequest = fetch("/api/epoch-battle", {
+        const picksRequest = fetch(`/api/epoch-battle?chain=${selectedArenaNetworkId}`, {
           cache: "no-store",
         });
         const picksResponse = await picksRequest;
@@ -306,7 +308,7 @@ export function ArenaFoyerClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedArenaNetworkId]);
 
   useEffect(() => {
     return () => {

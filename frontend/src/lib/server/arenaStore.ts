@@ -1,7 +1,13 @@
 import "server-only";
 
-import { getArenaSidecarCurrentEpochId, getArenaSidecarEpochEnd, getArenaSidecarEpochStart, isArenaSidecarConfigured } from "@/lib/arenaSidecar";
+import {
+  getArenaSidecarCurrentEpochId,
+  getArenaSidecarEpochEnd,
+  getArenaSidecarEpochStart,
+  isArenaSidecarConfiguredForNetwork,
+} from "@/lib/arenaSidecar";
 import { defaultAgentRuntimeProfiles } from "@/lib/agentProfiles";
+import { DEFAULT_ARENA_NETWORK_ID, type ArenaNetworkId } from "@/lib/arenaNetworks";
 import type {
   ArenaAgentDnaSnapshot,
   ArenaAgentId,
@@ -611,6 +617,7 @@ function buildSnapshot(
   epochId: number,
   epochStartMs: number,
   epochEndMs: number,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): ArenaBattleSnapshot {
   const listeners = Object.keys(state.listeners).length;
   const leaderboard = getLeaderboard(agents);
@@ -637,20 +644,23 @@ function buildSnapshot(
       leaderAgentId,
       projectedWinnerAgentId: leaderAgentId,
     },
-    bettingMode: isArenaSidecarConfigured ? "arena_sidecar_live" : "awaiting_arena_abi",
+    bettingMode: isArenaSidecarConfiguredForNetwork(networkId) ? "arena_sidecar_live" : "awaiting_arena_abi",
     lastUpdatedAt: now,
   };
 }
 
-async function syncArena(now: number): Promise<ArenaBattleSnapshot> {
+async function syncArena(
+  now: number,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
+): Promise<ArenaBattleSnapshot> {
   const state = getArenaState();
   const staleChanged = pruneStaleListeners(state, now);
   const loopChanged = applyListenerDrivenLoop(state, now);
-  const currentEpochId = await getArenaSidecarCurrentEpochId();
+  const currentEpochId = await getArenaSidecarCurrentEpochId(undefined, networkId);
   const resolvedEpochId = Number(currentEpochId ?? BigInt(Math.floor(now / EPOCH_MS)));
   const [epochStart, epochEnd] = await Promise.all([
-    getArenaSidecarEpochStart(BigInt(resolvedEpochId)),
-    getArenaSidecarEpochEnd(BigInt(resolvedEpochId)),
+    getArenaSidecarEpochStart(BigInt(resolvedEpochId), undefined, networkId),
+    getArenaSidecarEpochEnd(BigInt(resolvedEpochId), undefined, networkId),
   ]);
   const resolvedEpochEndMs = Number(epochEnd ?? BigInt((resolvedEpochId + 1) * 86_400)) * 1000;
   const resolvedEpochStartMs = Number(epochStart) > 0 ? Number(epochStart) * 1000 : resolvedEpochEndMs - EPOCH_MS;
@@ -663,7 +673,7 @@ async function syncArena(now: number): Promise<ArenaBattleSnapshot> {
     agents = buildArenaAgents(state, feed);
   }
 
-  const snapshot = buildSnapshot(state, now, agents, resolvedEpochId, resolvedEpochStartMs, resolvedEpochEndMs);
+  const snapshot = buildSnapshot(state, now, agents, resolvedEpochId, resolvedEpochStartMs, resolvedEpochEndMs, networkId);
 
   if (staleChanged || loopChanged || simChanged) {
     global.__PHONK_ARENA_RUNTIME__ = state;
@@ -672,17 +682,23 @@ async function syncArena(now: number): Promise<ArenaBattleSnapshot> {
   return snapshot;
 }
 
-export async function getArenaBattleSnapshot(now = Date.now()): Promise<ArenaBattleSnapshot> {
-  return syncArena(now);
+export async function getArenaBattleSnapshot(
+  now = Date.now(),
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
+): Promise<ArenaBattleSnapshot> {
+  return syncArena(now, networkId);
 }
 
-export async function joinArenaPresence(sessionIdRaw?: string): Promise<{ sessionId: string; snapshot: ArenaBattleSnapshot }> {
+export async function joinArenaPresence(
+  sessionIdRaw?: string,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
+): Promise<{ sessionId: string; snapshot: ArenaBattleSnapshot }> {
   const state = getArenaState();
   const now = Date.now();
   const sessionId = (sessionIdRaw || "").trim() || makeSessionId();
 
   state.listeners[sessionId] = now;
-  const snapshot = await syncArena(now);
+  const snapshot = await syncArena(now, networkId);
 
   return {
     sessionId,
@@ -690,7 +706,10 @@ export async function joinArenaPresence(sessionIdRaw?: string): Promise<{ sessio
   };
 }
 
-export async function leaveArenaPresence(sessionIdRaw?: string): Promise<ArenaBattleSnapshot> {
+export async function leaveArenaPresence(
+  sessionIdRaw?: string,
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
+): Promise<ArenaBattleSnapshot> {
   const state = getArenaState();
   const now = Date.now();
   const sessionId = (sessionIdRaw || "").trim();
@@ -699,5 +718,5 @@ export async function leaveArenaPresence(sessionIdRaw?: string): Promise<ArenaBa
     delete state.listeners[sessionId];
   }
 
-  return syncArena(now);
+  return syncArena(now, networkId);
 }

@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient } from "viem";
 
 import {
+  getArenaSidecarConfigError,
   getArenaSidecarCurrentEpochId,
   getArenaSidecarEpochPool,
   getArenaSidecarEpochResult,
   getArenaSidecarTokenSelection,
-  isArenaSidecarConfigured,
+  isArenaSidecarConfiguredForNetwork,
 } from "@/lib/arenaSidecar";
-import { inkMainnet } from "@/lib/inkChain";
-import { getInkRpcTransport } from "@/lib/inkRpc";
+import { getArenaNetworkConfig, getArenaNetworkId, getArenaNetworkTransport } from "@/lib/arenaNetworks";
 import { getAgentRuntimeProfiles } from "@/lib/server/agentProfileStore";
 import { isAdminAuthorized } from "@/lib/server/arenaOracle";
 import { getDiscoveryDailySeed, getLiveAgentTokenPicksForEpoch } from "@/lib/server/tokenDiscovery";
@@ -31,17 +31,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const publicClient = createPublicClient({
-      chain: inkMainnet,
-      transport: getInkRpcTransport(),
-    });
+    const networkId = getArenaNetworkId(request.nextUrl.searchParams.get("chain") ?? process.env.ARENA_SYNC_CHAIN);
+    const network = getArenaNetworkConfig(networkId);
+    const sidecarConfigured = isArenaSidecarConfiguredForNetwork(networkId);
+    const publicClient = sidecarConfigured
+      ? createPublicClient({
+          chain: network.chain,
+          transport: getArenaNetworkTransport(networkId),
+        })
+      : undefined;
 
     let epochId = getDiscoveryDailySeed();
     let contractStatus = "fallback";
     let contractError: string | null = null;
 
-    if (isArenaSidecarConfigured) {
-      const currentEpochId = await getArenaSidecarCurrentEpochId(publicClient);
+    if (sidecarConfigured) {
+      const currentEpochId = await getArenaSidecarCurrentEpochId(publicClient, networkId);
 
       if (currentEpochId !== null) {
         epochId = Number(currentEpochId);
@@ -52,7 +57,7 @@ export async function GET(request: NextRequest) {
       }
     } else {
       contractStatus = "missing_address";
-      contractError = "NEXT_PUBLIC_ARENA_SIDECAR_ADDRESS is not configured";
+      contractError = getArenaSidecarConfigError(networkId);
     }
 
     let picksError: string | null = null;
@@ -63,14 +68,14 @@ export async function GET(request: NextRequest) {
     });
 
     const [epochResult, epochPool] = await Promise.all([
-      getArenaSidecarEpochResult(epochIdBigInt, publicClient),
-      getArenaSidecarEpochPool(epochIdBigInt, publicClient),
+      getArenaSidecarEpochResult(epochIdBigInt, publicClient, networkId),
+      getArenaSidecarEpochPool(epochIdBigInt, publicClient, networkId),
     ]);
     const runtimeProfiles = await getAgentRuntimeProfiles();
 
     const agents = await Promise.all(
       ([0, 1, 2, 3] as const).map(async (agentId) => {
-        const selectionResult = await getArenaSidecarTokenSelection(epochIdBigInt, agentId, publicClient)
+        const selectionResult = await getArenaSidecarTokenSelection(epochIdBigInt, agentId, publicClient, networkId)
           .then((value) => ({ status: "fulfilled" as const, value }))
           .catch((reason) => ({ status: "rejected" as const, reason }));
 
@@ -129,6 +134,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       epochId,
+      chain: networkId,
+      chainName: network.label,
       timestamp: new Date().toISOString(),
       contractStatus,
       contractError,

@@ -1,5 +1,6 @@
 const baseUrl = (process.env.ARENA_SYNC_BASE_URL || "").trim().replace(/\/+$/, "");
 const adminSecret = (process.env.ADMIN_SECRET || "").trim();
+const arenaSyncChain = (process.env.ARENA_SYNC_CHAIN || "ink").trim() || "ink";
 const maxAttempts = 3;
 const retryDelayMs = 4_000;
 
@@ -80,10 +81,11 @@ async function runStep(label, path) {
 }
 
 async function main() {
-  console.log(`Arena sync started for ${baseUrl}`);
+  const chainQuery = `?chain=${encodeURIComponent(arenaSyncChain)}`;
+  console.log(`Arena sync started for ${baseUrl} on ${arenaSyncChain}`);
 
-  const finalizeOk = await runStep("Finalize", "/api/admin/epoch-finalize");
-  const startOk = await runStep("Start", "/api/admin/epoch-start");
+  const finalizeOk = await runStep("Finalize", `/api/admin/epoch-finalize${chainQuery}`);
+  const startOk = await runStep("Start", `/api/admin/epoch-start${chainQuery}`);
 
   console.log(`Arena sync finished${finalizeOk && startOk ? "." : " with warnings."}`);
 }
