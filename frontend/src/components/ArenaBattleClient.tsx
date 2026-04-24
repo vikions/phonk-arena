@@ -8,6 +8,7 @@ import {
   useAccount,
   useChainId,
   useReadContract,
+  useReadContracts,
   useSwitchChain,
   useWaitForTransactionReceipt,
   useWalletClient,
@@ -34,6 +35,8 @@ interface ArenaPresenceJoinResponse {
   sessionId: string;
   snapshot: ArenaBattleSnapshot;
 }
+
+const ARENA_AGENT_IDS = [0, 1, 2, 3] as const;
 
 function makeSessionId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -87,6 +90,27 @@ function formatNative(value: bigint, fractionDigits = 4): string {
   }
 
   return "0";
+}
+
+function isTokenSelectionRecorded(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return Boolean(value[8]);
+  }
+
+  if (value && typeof value === "object" && "recorded" in value) {
+    return Boolean((value as { recorded?: unknown }).recorded);
+  }
+
+  return false;
+}
+
+function getBetErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (message.includes("IncompleteSelections") || message.includes("0x35d6971f")) {
+    return "This epoch is not prepared on-chain yet. Run the epoch-start sync for the selected network and retry.";
+  }
+
+  return message || "Bet transaction failed.";
 }
 
 function shortTime(timestamp: number): string {
@@ -291,6 +315,21 @@ export function ArenaBattleClient() {
       ? sidecarCurrentEpochIdRaw
       : BigInt(snapshot?.currentEpoch.epochId ?? 0);
   const sidecarPreviousEpochId = sidecarCurrentEpochId > 0n ? sidecarCurrentEpochId - 1n : null;
+  const shouldCheckOnchainSelections = selectedArenaNetworkId === "litvm";
+
+  const { data: currentEpochSelectionReads } = useReadContracts({
+    contracts: ARENA_AGENT_IDS.map((agentId) => ({
+      address: selectedSidecarAddress,
+      abi: arenaSidecarAbi,
+      functionName: "getEpochTokenSelection",
+      args: [sidecarCurrentEpochId, agentId],
+      chainId: selectedNetworkConfigured ? selectedArenaNetwork.chainId : undefined,
+    })),
+    query: {
+      enabled: selectedSidecarConfigured && shouldCheckOnchainSelections,
+      refetchInterval: 5_000,
+    },
+  });
 
   const { data: currentEpochPoolRaw, refetch: refetchCurrentEpochPool } = useReadContract({
     address: selectedSidecarAddress,
@@ -796,6 +835,20 @@ export function ArenaBattleClient() {
   const previousEpochResult = useMemo(() => normalizeEpochResult(previousEpochResultRaw), [previousEpochResultRaw]);
   const previousUserBet = useMemo(() => normalizeUserBet(previousUserBetRaw), [previousUserBetRaw]);
   const currentEpochOpen = Boolean(currentEpochOpenRaw);
+  const currentEpochSelectionsReady = useMemo(() => {
+    if (!shouldCheckOnchainSelections) {
+      return true;
+    }
+
+    if (!currentEpochSelectionReads || currentEpochSelectionReads.length < ARENA_AGENT_IDS.length) {
+      return false;
+    }
+
+    return currentEpochSelectionReads.every(
+      (entry) => entry.status === "success" && isTokenSelectionRecorded(entry.result),
+    );
+  }, [currentEpochSelectionReads, shouldCheckOnchainSelections]);
+  const currentEpochReadyForBets = currentEpochOpen && currentEpochSelectionsReady;
   const currentEpochEndTimestamp =
     typeof currentEpochEndRaw === "bigint" ? Number(currentEpochEndRaw) * 1000 : snapshot?.currentEpoch.endsAt ?? 0;
 
@@ -918,7 +971,10 @@ export function ArenaBattleClient() {
 
   const submitBet = useCallback(
     async (agentId: ArenaAgentId) => {
-      if (!walletClient || !address || !selectedSidecarConfigured || !currentEpochOpen || !hasValidBetAmount || !parsedBetWei) {
+      if (!walletClient || !address || !selectedSidecarConfigured || !currentEpochReadyForBets || !hasValidBetAmount || !parsedBetWei) {
+        if (shouldCheckOnchainSelections && currentEpochOpen && !currentEpochSelectionsReady) {
+          setBetError("LitVM epoch is not prepared on-chain yet. Run the LitVM epoch-start sync and retry.");
+        }
         return;
       }
 
@@ -942,18 +998,21 @@ export function ArenaBattleClient() {
         setBetTxHash(hash);
       } catch (betSubmitError) {
         setBetBusy(false);
-        setBetError(betSubmitError instanceof Error ? betSubmitError.message : "Bet transaction failed.");
+        setBetError(getBetErrorMessage(betSubmitError));
       }
     },
     [
       address,
       currentBetAgentId,
       currentEpochOpen,
+      currentEpochReadyForBets,
+      currentEpochSelectionsReady,
       ensureWalletOnSelectedNetwork,
       hasValidBetAmount,
       parsedBetWei,
       selectedArenaNetworkId,
       selectedSidecarConfigured,
+      shouldCheckOnchainSelections,
       sidecarCurrentEpochId,
       walletClient,
     ],
@@ -1258,7 +1317,11 @@ export function ArenaBattleClient() {
                       {currentEpochPool ? `${formatNative(currentEpochPool.totalPool)} ${selectedCurrencySymbol}` : "Loading Pool"}
                     </p>
                     <p className="agent-role mt-2 text-xs text-white/54">
-                      {currentEpochOpen ? "Open For Bets" : "Betting Closed"}
+                      {currentEpochReadyForBets
+                        ? "Open For Bets"
+                        : currentEpochOpen && shouldCheckOnchainSelections
+                          ? "Waiting For LitVM Sync"
+                          : "Betting Closed"}
                     </p>
                     <p className="agent-role mt-1 text-xs text-white/44">
                       On-chain result:{" "}
@@ -1268,6 +1331,11 @@ export function ArenaBattleClient() {
                           : snapshot.agents.find((agent) => agent.agentId === currentEpochResult.winnerAgentId)?.name ?? `Agent ${currentEpochResult.winnerAgentId}`
                         : "Pending Finalization"}
                     </p>
+                    {currentEpochOpen && shouldCheckOnchainSelections && !currentEpochSelectionsReady ? (
+                      <p className="mono mt-2 text-xs text-[var(--rage)]">
+                        LitVM on-chain token selections are not recorded yet.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="mt-4 grid gap-2">
@@ -1291,7 +1359,7 @@ export function ArenaBattleClient() {
                       const disabled =
                         !isConnected ||
                         wrongChain ||
-                        !currentEpochOpen ||
+                        !currentEpochReadyForBets ||
                         !hasValidBetAmount ||
                         betBusy ||
                         betConfirming ||
