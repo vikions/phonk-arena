@@ -189,6 +189,10 @@ function normalizeAddress(address: string | undefined): string {
   return (address || "").trim().toLowerCase();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function countSocials(token: InkyPumpToken): number {
   return [token.website, token.telegram, token.twitter].filter(
     (value) => typeof value === "string" && value.trim().length > 0,
@@ -204,10 +208,15 @@ function parseCreatedAt(value: string | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function normalizeInkyToken(token: InkyPumpToken, sourceRank: { trendingRank: number | null; newestRank: number | null }): RankedInkyToken | null {
-  const address = normalizeAddress(token.address);
-  const symbol = (token.ticker || "").trim().toUpperCase();
-  const name = (token.name || "").trim();
+function normalizeInkyToken(token: InkyPumpToken | null | undefined, sourceRank: { trendingRank: number | null; newestRank: number | null }): RankedInkyToken | null {
+  if (!isRecord(token)) {
+    return null;
+  }
+
+  const rawToken = token as InkyPumpToken;
+  const address = normalizeAddress(rawToken.address);
+  const symbol = (rawToken.ticker || "").trim().toUpperCase();
+  const name = (rawToken.name || "").trim();
 
   if (!address || address === ZERO_ADDRESS || !symbol || !name) {
     return null;
@@ -217,13 +226,13 @@ function normalizeInkyToken(token: InkyPumpToken, sourceRank: { trendingRank: nu
     address,
     symbol,
     name,
-    priceChange24h: toNumber(token.price_change_24h),
-    volume24h: toNumber(token.volume_24h),
-    holderCount: toNumber(token.total_holders),
-    circulatingMarketCap: toNumber(token.market_cap),
-    txCount24h: toNumber(token.txns_24h_buys) + toNumber(token.txns_24h_sells),
-    socialCount: countSocials(token),
-    createdAt: parseCreatedAt(token.created_at),
+    priceChange24h: toNumber(rawToken.price_change_24h),
+    volume24h: toNumber(rawToken.volume_24h),
+    holderCount: toNumber(rawToken.total_holders),
+    circulatingMarketCap: toNumber(rawToken.market_cap),
+    txCount24h: toNumber(rawToken.txns_24h_buys) + toNumber(rawToken.txns_24h_sells),
+    socialCount: countSocials(rawToken),
+    createdAt: parseCreatedAt(rawToken.created_at),
     trendingRank: sourceRank.trendingRank,
     newestRank: sourceRank.newestRank,
   };
@@ -308,16 +317,21 @@ function pickBestPair(tokenAddress: string, pairs: DexPair[]): DexPair | null {
   let bestLiquidity = -1;
 
   for (const pair of pairs) {
-    const baseAddress = normalizeAddress(pair.baseToken?.address);
-    const quoteAddress = normalizeAddress(pair.quoteToken?.address);
+    if (!isRecord(pair)) {
+      continue;
+    }
+
+    const dexPair = pair as DexPair;
+    const baseAddress = normalizeAddress(dexPair.baseToken?.address);
+    const quoteAddress = normalizeAddress(dexPair.quoteToken?.address);
     if (baseAddress !== normalizedAddress && quoteAddress !== normalizedAddress) {
       continue;
     }
 
-    const liquidityUsd = toNumber(pair.liquidity?.usd);
+    const liquidityUsd = toNumber(dexPair.liquidity?.usd);
     if (liquidityUsd > bestLiquidity) {
       bestLiquidity = liquidityUsd;
-      bestPair = pair;
+      bestPair = dexPair;
     }
   }
 
@@ -337,15 +351,20 @@ async function fetchDexPairsByToken(tokens: RankedInkyToken[]): Promise<Map<stri
     const groupedPairs = new Map<string, DexPair[]>();
 
     for (const pair of pairs) {
-      const baseAddress = normalizeAddress(pair.baseToken?.address);
-      const quoteAddress = normalizeAddress(pair.quoteToken?.address);
+      if (!isRecord(pair)) {
+        continue;
+      }
+
+      const dexPair = pair as DexPair;
+      const baseAddress = normalizeAddress(dexPair.baseToken?.address);
+      const quoteAddress = normalizeAddress(dexPair.quoteToken?.address);
 
       if (baseAddress) {
-        groupedPairs.set(baseAddress, [...(groupedPairs.get(baseAddress) || []), pair]);
+        groupedPairs.set(baseAddress, [...(groupedPairs.get(baseAddress) || []), dexPair]);
       }
 
       if (quoteAddress && quoteAddress !== baseAddress) {
-        groupedPairs.set(quoteAddress, [...(groupedPairs.get(quoteAddress) || []), pair]);
+        groupedPairs.set(quoteAddress, [...(groupedPairs.get(quoteAddress) || []), dexPair]);
       }
     }
 
@@ -369,15 +388,20 @@ async function fetchDexPairsByAddress(addresses: string[]): Promise<Map<string, 
     const groupedPairs = new Map<string, DexPair[]>();
 
     for (const pair of pairs) {
-      const baseAddress = normalizeAddress(pair.baseToken?.address);
-      const quoteAddress = normalizeAddress(pair.quoteToken?.address);
+      if (!isRecord(pair)) {
+        continue;
+      }
+
+      const dexPair = pair as DexPair;
+      const baseAddress = normalizeAddress(dexPair.baseToken?.address);
+      const quoteAddress = normalizeAddress(dexPair.quoteToken?.address);
 
       if (baseAddress) {
-        groupedPairs.set(baseAddress, [...(groupedPairs.get(baseAddress) || []), pair]);
+        groupedPairs.set(baseAddress, [...(groupedPairs.get(baseAddress) || []), dexPair]);
       }
 
       if (quoteAddress && quoteAddress !== baseAddress) {
-        groupedPairs.set(quoteAddress, [...(groupedPairs.get(quoteAddress) || []), pair]);
+        groupedPairs.set(quoteAddress, [...(groupedPairs.get(quoteAddress) || []), dexPair]);
       }
     }
 
