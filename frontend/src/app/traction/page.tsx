@@ -10,10 +10,10 @@ export default function TractionPage() {
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="hero-eyebrow text-xs text-white/48">Traction Layer</p>
-            <h1 className="section-title mt-2 text-white">Product Reach And Confirmed Activity</h1>
+            <h1 className="section-title mt-2 text-white">Onchain Contract Traction</h1>
             <p className="subtitle mt-3 max-w-2xl text-sm leading-6 text-white/72 sm:text-base">
-              Separate instrumentation screen for Spark resubmission proof. The core lobby and live arena stay focused on
-              agents, clips, and battle flow.
+              Live Ink metrics pulled directly from the arena sidecar contract: active wallets, repeat usage, confirmed
+              bets, volume, and current locked pool.
             </p>
           </div>
 
