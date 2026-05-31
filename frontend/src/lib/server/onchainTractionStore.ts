@@ -1,4 +1,4 @@
-import type { Address, Hash, PublicClient } from "viem";
+import type { Address, PublicClient } from "viem";
 import { createPublicClient, formatEther, parseAbiItem } from "viem";
 
 import {
@@ -15,7 +15,7 @@ import {
   getArenaSidecarEpochPool,
   isArenaSidecarEpochOpen,
 } from "@/lib/arenaSidecar";
-import type { OnchainTractionSummary, RecentOnchainBet } from "@/lib/onchainTractionTypes";
+import type { OnchainTractionSummary } from "@/lib/onchainTractionTypes";
 
 const BET_PLACED_EVENT = parseAbiItem(
   "event BetPlaced(uint256 indexed epochId, address indexed user, uint8 indexed agentId, uint256 amount)",
@@ -26,7 +26,6 @@ const DAY_SECONDS = 24 * 60 * 60;
 const WEEK_SECONDS = 7 * DAY_SECONDS;
 const DEFAULT_LOG_CHUNK_BLOCKS = 25_000n;
 const MIN_LOG_CHUNK_BLOCKS = 1_000n;
-const RECENT_BET_LIMIT = 6;
 
 let cachedSummary:
   | {
@@ -43,9 +42,7 @@ type BetPlacedLog = Awaited<ReturnType<PublicClient["getLogs"]>>[number] & {
     agentId?: number | bigint;
     amount?: bigint;
   };
-  transactionHash?: Hash;
   blockNumber?: bigint;
-  logIndex?: number;
 };
 
 function readPositiveBigIntEnv(name: string, fallback: bigint): bigint {
@@ -101,21 +98,6 @@ function emptySummary(networkId: ArenaNetworkId, error?: string): OnchainTractio
     recentBets: [],
     error,
   };
-}
-
-function compareLogsDesc(left: BetPlacedLog, right: BetPlacedLog): number {
-  const leftBlock = left.blockNumber ?? 0n;
-  const rightBlock = right.blockNumber ?? 0n;
-
-  if (leftBlock > rightBlock) {
-    return -1;
-  }
-
-  if (leftBlock < rightBlock) {
-    return 1;
-  }
-
-  return (right.logIndex ?? 0) - (left.logIndex ?? 0);
 }
 
 async function findBlockAtOrBeforeTimestamp(
@@ -199,37 +181,6 @@ function repeatBettorCount(logs: BetPlacedLog[]): number {
   return [...counts.values()].filter((count) => count >= 2).length;
 }
 
-async function buildRecentBets(publicClient: PublicClient, logs: BetPlacedLog[]): Promise<RecentOnchainBet[]> {
-  const recentLogs = [...logs].sort(compareLogsDesc).slice(0, RECENT_BET_LIMIT);
-  const blockNumbers = [...new Set(recentLogs.map((log) => log.blockNumber).filter((value): value is bigint => Boolean(value)))];
-  const blockTimes = new Map<string, string>();
-
-  await Promise.all(
-    blockNumbers.map(async (blockNumber) => {
-      try {
-        const block = await publicClient.getBlock({ blockNumber });
-        blockTimes.set(blockNumber.toString(), new Date(Number(block.timestamp) * 1000).toISOString());
-      } catch {
-        blockTimes.set(blockNumber.toString(), "");
-      }
-    }),
-  );
-
-  return recentLogs.map((log) => {
-    const blockNumber = log.blockNumber ?? 0n;
-
-    return {
-      txHash: log.transactionHash ?? "",
-      walletAddress: log.args?.user ?? "",
-      epochId: (log.args?.epochId ?? 0n).toString(),
-      agentId: Number(log.args?.agentId ?? 0),
-      amountEth: formatEthAmount(log.args?.amount ?? 0n),
-      blockNumber: blockNumber.toString(),
-      createdAt: blockTimes.get(blockNumber.toString()) || null,
-    };
-  });
-}
-
 export async function getOnchainTractionSummary(
   rawNetworkId?: string | null,
 ): Promise<OnchainTractionSummary> {
@@ -303,7 +254,7 @@ export async function getOnchainTractionSummary(
       volume7dEth: formatEthAmount(sumBetAmounts(logs7d)),
       latestBlock: latestBlockNumber.toString(),
       scannedFromBlock: from7dBlock.toString(),
-      recentBets: await buildRecentBets(publicClient, logs7d),
+      recentBets: [],
     };
 
     cachedSummary = {

@@ -1,13 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { OnchainTractionSummary } from "@/lib/onchainTractionTypes";
-
-function shortHash(value: string): string {
-  return `${value.slice(0, 8)}...${value.slice(-6)}`;
-}
 
 function shortAddress(value: string): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
@@ -49,12 +45,19 @@ function epochStatus(value: boolean | null): string {
 export function TractionPanel() {
   const [summary, setSummary] = useState<OnchainTractionSummary>(emptySummary);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       try {
+        if (loadedOnceRef.current) {
+          setRefreshing(true);
+        }
+
         const response = await fetch("/api/onchain/traction?network=ink", {
           cache: "no-store",
         });
@@ -67,10 +70,16 @@ export function TractionPanel() {
         if (!cancelled) {
           setSummary(payload);
           setError(payload.error ?? null);
+          setLoading(false);
+          setRefreshing(false);
+          loadedOnceRef.current = true;
         }
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load onchain traction summary.");
+          setLoading(false);
+          setRefreshing(false);
+          loadedOnceRef.current = true;
         }
       }
     };
@@ -104,7 +113,10 @@ export function TractionPanel() {
 
         <div className="mono text-[11px] uppercase tracking-[0.14em] text-white/52">
           <p>Source: {summary.networkLabel} onchain</p>
-          <p className="mt-1">Updated: {new Date(summary.generatedAt).toLocaleTimeString()}</p>
+          <p className="mt-1">
+            {loading ? "Loading contract data..." : `Updated: ${new Date(summary.generatedAt).toLocaleTimeString()}`}
+          </p>
+          {refreshing ? <p className="mt-1 text-cyan-200/72">Refreshing...</p> : null}
         </div>
       </div>
 
@@ -133,7 +145,7 @@ export function TractionPanel() {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="mt-4">
         <div className="rounded-[1.2rem] border border-white/10 bg-black/24 p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="stat-label">Contract Signal</p>
@@ -179,48 +191,6 @@ export function TractionPanel() {
           <p className="mt-3 text-[11px] uppercase tracking-[0.12em] text-white/38">
             Latest block {summary.latestBlock ?? "unknown"} · scanned from {summary.scannedFromBlock ?? "unknown"}
           </p>
-        </div>
-
-        <div className="rounded-[1.2rem] border border-white/10 bg-black/24 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="stat-label">Recent Onchain Bets</p>
-            <span className="text-[11px] uppercase tracking-[0.14em] text-white/42">BetPlaced</span>
-          </div>
-
-          {summary.recentBets.length === 0 ? (
-            <p className="mt-3 text-sm text-white/62">No BetPlaced events found in the current scan window.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {summary.recentBets.map((entry) => (
-                <li key={`${entry.txHash}:${entry.blockNumber}`} className="data-chip rounded-[6px] px-3 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs uppercase tracking-[0.14em] text-white/68">
-                      Agent {entry.agentId} · Epoch {entry.epochId}
-                    </p>
-                    <p className="text-xs text-white/42">
-                      {entry.createdAt ? new Date(entry.createdAt).toLocaleTimeString() : `Block ${entry.blockNumber}`}
-                    </p>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="mono text-xs text-white/82">{shortHash(entry.txHash)}</p>
-                      <p className="mt-1 text-xs text-white/42">
-                        {shortAddress(entry.walletAddress)} · {entry.amountEth} ETH
-                      </p>
-                    </div>
-                    <Link
-                      href={`${summary.explorerUrl}/tx/${entry.txHash}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs uppercase tracking-[0.14em] text-cyan-200/86 transition hover:text-cyan-100"
-                    >
-                      View Tx
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </div>
 
