@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const fallbackEpochId = getDiscoveryDailySeed();
     const epochId = Number(currentEpochId ?? BigInt(fallbackEpochId));
     const [picks, profiles] = await Promise.all([
-      getAgentTokenPicksForEpoch(currentEpochId ?? BigInt(fallbackEpochId)),
+      getAgentTokenPicksForEpoch(currentEpochId ?? BigInt(fallbackEpochId), Date.now(), networkId),
       getAgentRuntimeProfiles(),
     ]);
 

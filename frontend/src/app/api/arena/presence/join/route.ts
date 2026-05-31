@@ -1,14 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
+import { getArenaNetworkId } from "@/lib/arenaNetworks";
 import { joinArenaPresence } from "@/lib/server/arenaStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const networkId = getArenaNetworkId(request.nextUrl.searchParams.get("chain"));
     const payload = (await request.json().catch(() => ({}))) as { sessionId?: string };
-    const result = await joinArenaPresence(payload.sessionId);
+    const result = await joinArenaPresence(payload.sessionId, networkId);
 
     return NextResponse.json(result, {
       headers: {

@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     let picksError: string | null = null;
     const epochIdBigInt = BigInt(epochId);
-    const livePicks = await getLiveAgentTokenPicksForEpoch(epochIdBigInt).catch((error) => {
+    const livePicks = await getLiveAgentTokenPicksForEpoch(epochIdBigInt, Date.now(), networkId).catch((error) => {
       picksError = error instanceof Error ? error.message : "Failed to simulate token picks";
       return null;
     });

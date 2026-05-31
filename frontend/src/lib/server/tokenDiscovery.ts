@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEFAULT_ARENA_NETWORK_ID, type ArenaNetworkId, getArenaNetworkConfig } from "@/lib/arenaNetworks";
 import type { AgentId, AgentTokenPick, DiscoveredInkToken, InkToken } from "@/lib/tokenDiscovery";
 import { updateHolderSnapshots } from "@/lib/server/tokenSnapshotStore";
 
@@ -75,11 +76,123 @@ interface CandidateToken extends DiscoveredInkToken {
 
 type TokenPickMap = Record<AgentId, AgentTokenPick>;
 
+interface LitvmStaticTokenSeed {
+  address: string;
+  symbol: string;
+  name: string;
+  priceUsd: number;
+  priceChange24h: number;
+  volume24h: number;
+  holderCount: number;
+  liquidityUsd: number;
+  txCount24h: number;
+  createdAt: string;
+}
+
 const INKYPUMP_API_BASE_URL = "https://inkypump.com/api";
 const DEXSCREENER_API_BASE_URL = "https://api.dexscreener.com";
 const DEXSCREENER_CHAIN_ID = "ink";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_BATCH_SIZE = 30;
+
+const LITVM_STATIC_TOKEN_SEEDS: LitvmStaticTokenSeed[] = [
+  {
+    address: "0xd141F870aC7aD1912b20bda552A9676f831B5F2f",
+    symbol: "WZKLTC",
+    name: "Wrapped zkLTC",
+    priceUsd: 84.12,
+    priceChange24h: 1.8,
+    volume24h: 12_400,
+    holderCount: 320,
+    liquidityUsd: 86_000,
+    txCount24h: 142,
+    createdAt: "2025-01-01T00:00:00.000Z",
+  },
+  {
+    address: "0xa511bC66937B7ab51cf195441dA7FC6793D8B616",
+    symbol: "LITGOV",
+    name: "LitGovToken",
+    priceUsd: 0.034,
+    priceChange24h: 6.2,
+    volume24h: 8_700,
+    holderCount: 180,
+    liquidityUsd: 42_000,
+    txCount24h: 118,
+    createdAt: "2025-01-01T00:00:00.000Z",
+  },
+  {
+    address: "0x5d4562B3F4F68c913eCaD2366e72CcE0a7f8a2a1",
+    symbol: "LESTER",
+    name: "Lester Labs Token Factory",
+    priceUsd: 0.012,
+    priceChange24h: -2.4,
+    volume24h: 6_200,
+    holderCount: 140,
+    liquidityUsd: 31_000,
+    txCount24h: 96,
+    createdAt: "2025-01-01T00:00:00.000Z",
+  },
+  {
+    address: "0x9b0Ae242F81D456676E9b7CFe71B3cC83b8b9f56",
+    symbol: "LITESWAP",
+    name: "LiteSwap Community Token",
+    priceUsd: 0.008,
+    priceChange24h: 3.7,
+    volume24h: 4_900,
+    holderCount: 110,
+    liquidityUsd: 24_000,
+    txCount24h: 77,
+    createdAt: "2025-01-01T00:00:00.000Z",
+  },
+];
+
+function normalizeLitvmStaticTokenSeed(value: unknown): LitvmStaticTokenSeed | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const address = typeof value.address === "string" ? value.address.trim() : "";
+  const symbol = typeof value.symbol === "string" ? value.symbol.trim().toUpperCase() : "";
+  const name = typeof value.name === "string" ? value.name.trim() : symbol;
+
+  if (!address || !symbol || !name) {
+    return null;
+  }
+
+  return {
+    address,
+    symbol,
+    name,
+    priceUsd: toNumber(value.priceUsd),
+    priceChange24h: toNumber(value.priceChange24h),
+    volume24h: toNumber(value.volume24h),
+    holderCount: toNumber(value.holderCount),
+    liquidityUsd: toNumber(value.liquidityUsd),
+    txCount24h: toNumber(value.txCount24h),
+    createdAt:
+      typeof value.createdAt === "string" && !Number.isNaN(new Date(value.createdAt).getTime())
+        ? new Date(value.createdAt).toISOString()
+        : "2025-01-01T00:00:00.000Z",
+  };
+}
+
+function getLitvmStaticTokenSeeds(): LitvmStaticTokenSeed[] {
+  const raw = process.env.LITVM_STATIC_TOKENS_JSON?.trim();
+  if (!raw) {
+    return LITVM_STATIC_TOKEN_SEEDS;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const tokens = Array.isArray(parsed)
+      ? parsed.map(normalizeLitvmStaticTokenSeed).filter((token): token is LitvmStaticTokenSeed => token !== null)
+      : [];
+
+    return tokens.length >= 4 ? tokens.slice(0, 4) : LITVM_STATIC_TOKEN_SEEDS;
+  } catch {
+    return LITVM_STATIC_TOKEN_SEEDS;
+  }
+}
 
 const BLACKLIST_SYMBOLS = [
   "USDT",
@@ -121,7 +234,7 @@ const STRATEGY_NAMES: Record<AgentId, AgentTokenPick["strategy"]> = {
   3: "GLITCH",
 };
 
-const cachedEpochPickStates = new Map<number, Promise<TokenPickMap>>();
+const cachedEpochPickStates = new Map<string, Promise<TokenPickMap>>();
 
 function toNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -462,6 +575,50 @@ function normalizeRatio(value: number, maxValue: number): number {
   return Math.min(value / maxValue, 1);
 }
 
+function getNetworkEpochCacheKey(networkId: ArenaNetworkId, epochSeed: number): string {
+  return `${networkId}:${epochSeed}`;
+}
+
+function makeExplorerUrl(networkId: ArenaNetworkId, address: string): string | null {
+  const explorerUrl = getArenaNetworkConfig(networkId).explorerUrl;
+  return explorerUrl ? `${explorerUrl.replace(/\/+$/, "")}/address/${address}` : null;
+}
+
+function buildLitvmStaticCandidates(networkId: ArenaNetworkId, epochSeed: number): CandidateToken[] {
+  const candidates = getLitvmStaticTokenSeeds().map((seed, index) => {
+    const epochJitter = ((getRandomHash(`${networkId}:${epochSeed}:${seed.address}`) % 1201) - 600) / 100;
+    const priceChange24h = seed.priceChange24h + epochJitter;
+
+    return {
+      address: normalizeAddress(seed.address),
+      symbol: seed.symbol,
+      name: seed.name,
+      priceUsd: seed.priceUsd,
+      priceChange24h,
+      volume24h: seed.volume24h,
+      holderCount: seed.holderCount,
+      circulatingMarketCap: seed.priceUsd * Math.max(seed.holderCount, 1) * 1_000,
+      holderDelta24h: null,
+      liquidityUsd: seed.liquidityUsd,
+      txCount24h: seed.txCount24h,
+      socialCount: 1,
+      createdAt: seed.createdAt,
+      pairAddress: null,
+      pairUrl: makeExplorerUrl(networkId, seed.address),
+      source: "litvm-static" as const,
+      hypeScore: 0,
+      strategyScore: 0,
+      ghostScore: 0,
+      oracleScore: 0,
+      rageScore: 0,
+      recencyScore: Math.max(0.2, 0.8 - index * 0.08),
+      trendingScore: Math.max(0.35, 0.95 - index * 0.12),
+    };
+  });
+
+  return scoreCandidates(candidates);
+}
+
 function buildCandidates(
   rawTokens: RankedInkyToken[],
   pairByAddress: Map<string, DexPair | null>,
@@ -610,7 +767,11 @@ function buildGlitchPool(tokens: CandidateToken[], dailySeed: number): Candidate
   });
 }
 
-async function discoverCandidateTokens(nowMs = Date.now()): Promise<CandidateToken[]> {
+async function discoverCandidateTokens(nowMs = Date.now(), networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID, epochSeed = getFallbackEpochSeed(nowMs)): Promise<CandidateToken[]> {
+  if (networkId === "litvm") {
+    return buildLitvmStaticCandidates(networkId, epochSeed);
+  }
+
   const inkyTokens = await fetchInkyPumpPages();
   if (inkyTokens.length === 0) {
     throw new Error("No hype tokens available from InkyPump at this time");
@@ -635,9 +796,13 @@ async function discoverCandidateTokens(nowMs = Date.now()): Promise<CandidateTok
   return candidates;
 }
 
-async function computeAgentTokenPicksForEpoch(epochId: bigint | number, nowMs = Date.now()): Promise<TokenPickMap> {
+async function computeAgentTokenPicksForEpoch(
+  epochId: bigint | number,
+  nowMs = Date.now(),
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
+): Promise<TokenPickMap> {
   const epochSeed = getEpochSeed(epochId);
-  const candidates = await discoverCandidateTokens(nowMs);
+  const candidates = await discoverCandidateTokens(nowMs, networkId, epochSeed);
 
   const ragePool = sortByScore(candidates, "rageScore");
   const ghostPool = sortByScore(candidates, "ghostScore");
@@ -701,21 +866,23 @@ export function getDiscoveryDailySeed(nowMs = Date.now()): number {
 export async function getAgentTokenPicksForEpoch(
   epochId: bigint | number,
   nowMs = Date.now(),
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<TokenPickMap> {
   const epochSeed = getEpochSeed(epochId);
-  const cached = cachedEpochPickStates.get(epochSeed);
+  const cacheKey = getNetworkEpochCacheKey(networkId, epochSeed);
+  const cached = cachedEpochPickStates.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const promise = computeAgentTokenPicksForEpoch(epochSeed, nowMs);
-  cachedEpochPickStates.set(epochSeed, promise);
+  const promise = computeAgentTokenPicksForEpoch(epochSeed, nowMs, networkId);
+  cachedEpochPickStates.set(cacheKey, promise);
 
   try {
     return await promise;
   } catch (error) {
-    if (cachedEpochPickStates.get(epochSeed) === promise) {
-      cachedEpochPickStates.delete(epochSeed);
+    if (cachedEpochPickStates.get(cacheKey) === promise) {
+      cachedEpochPickStates.delete(cacheKey);
     }
     throw error;
   }
@@ -733,8 +900,13 @@ export async function agentPickToken(agentId: AgentId, nowMs = Date.now()): Prom
 export async function getLiveAgentTokenPicksForEpoch(
   epochId: bigint | number,
   nowMs = Date.now(),
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<TokenPickMap> {
-  const baselinePicks = await getAgentTokenPicksForEpoch(epochId, nowMs);
+  const baselinePicks = await getAgentTokenPicksForEpoch(epochId, nowMs, networkId);
+  if (networkId === "litvm") {
+    return baselinePicks;
+  }
+
   const addresses = Object.values(baselinePicks).map((pick) => pick.token.address);
   const pairByAddress = await fetchDexPairsByAddress(addresses);
 
@@ -776,8 +948,30 @@ export async function getLiveDailyAgentTokenPicks(nowMs = Date.now()): Promise<T
 export async function getLiveArenaTokenMetrics(
   addresses: string[],
   nowMs = Date.now(),
+  networkId: ArenaNetworkId = DEFAULT_ARENA_NETWORK_ID,
 ): Promise<Record<string, LiveArenaTokenMetrics>> {
   const normalizedAddresses = addresses.map((address) => normalizeAddress(address)).filter((address) => address.length > 0);
+
+  if (networkId === "litvm") {
+    const staticByAddress = new Map(buildLitvmStaticCandidates(networkId, getFallbackEpochSeed(nowMs)).map((token) => [token.address, token]));
+    const metricsByAddress: Record<string, LiveArenaTokenMetrics> = {};
+
+    normalizedAddresses.forEach((address) => {
+      const token = staticByAddress.get(address);
+      metricsByAddress[address] = {
+        address,
+        symbol: token?.symbol || "UNKNOWN",
+        priceUsd: token?.priceUsd ?? 0,
+        volume24h: token?.volume24h ?? 0,
+        holderCount: token?.holderCount ?? 0,
+        liquidityUsd: token?.liquidityUsd ?? 0,
+        txCount24h: token?.txCount24h ?? 0,
+      };
+    });
+
+    return metricsByAddress;
+  }
+
   const pairByAddress = await fetchDexPairsByAddress(normalizedAddresses);
   const inkyTokens = await fetchInkyPumpPages();
   const inkyByAddress = new Map(inkyTokens.map((token) => [token.address, token]));

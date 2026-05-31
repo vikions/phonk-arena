@@ -68,7 +68,7 @@ export async function syncCurrentArenaEpochStart(networkId: ArenaNetworkId = DEF
     throw new Error("Unable to read current arena epoch.");
   }
 
-  const picks = await getAgentTokenPicksForEpoch(currentEpochId);
+  const picks = await getAgentTokenPicksForEpoch(currentEpochId, Date.now(), networkId);
   const walletClient = getArenaOracleWalletClient(networkId);
   const actions: Array<{
     agentId: number;
@@ -212,6 +212,8 @@ export async function syncArenaEpochFinalize(
 
   const metricsByAddress = await getLiveArenaTokenMetrics(
     selections.map((entry) => entry.selection.tokenAddress),
+    Date.now(),
+    networkId,
   );
 
   const finalPriceUsdE8 = [0n, 0n, 0n, 0n] as [bigint, bigint, bigint, bigint];

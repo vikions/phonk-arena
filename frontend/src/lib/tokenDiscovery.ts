@@ -36,7 +36,7 @@ export interface DiscoveredInkToken extends InkToken {
   strategyScore: number;
   pairAddress: string | null;
   pairUrl: string | null;
-  source: "inkypump+dexscreener";
+  source: "inkypump+dexscreener" | "litvm-static";
 }
 
 export interface AgentTokenPick {

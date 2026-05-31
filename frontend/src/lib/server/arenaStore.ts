@@ -292,6 +292,7 @@ async function getArenaFeed(
   epochId: bigint,
   now: number,
   state: ArenaRuntimeState,
+  networkId: ArenaNetworkId,
 ): Promise<CachedArenaAgentFeed[]> {
   if (
     state.dataCache &&
@@ -302,8 +303,8 @@ async function getArenaFeed(
   }
 
   const [selectedPicks, livePicks] = await Promise.all([
-    getAgentTokenPicksForEpoch(epochId, now),
-    getLiveAgentTokenPicksForEpoch(epochId, now).catch(() => null),
+    getAgentTokenPicksForEpoch(epochId, now, networkId),
+    getLiveAgentTokenPicksForEpoch(epochId, now, networkId).catch(() => null),
   ]);
 
   const liveTokens = AGENT_META.map((agent) => livePicks?.[agent.agentId]?.token ?? selectedPicks[agent.agentId].token);
@@ -665,7 +666,7 @@ async function syncArena(
   const resolvedEpochEndMs = Number(epochEnd ?? BigInt((resolvedEpochId + 1) * 86_400)) * 1000;
   const resolvedEpochStartMs = Number(epochStart) > 0 ? Number(epochStart) * 1000 : resolvedEpochEndMs - EPOCH_MS;
 
-  const feed = await getArenaFeed(BigInt(resolvedEpochId), now, state);
+  const feed = await getArenaFeed(BigInt(resolvedEpochId), now, state, networkId);
   let agents = buildArenaAgents(state, feed);
   const simChanged = syncClipSimulation(state, now, agents);
 
