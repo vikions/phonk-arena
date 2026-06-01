@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { OnchainTractionSummary } from "@/lib/onchainTractionTypes";
 
+const SNAPSHOT_STORAGE_KEY = "phonk_arena_onchain_traction_snapshot";
+
 function shortAddress(value: string): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
@@ -42,6 +44,42 @@ function epochStatus(value: boolean | null): string {
   return value ? "Open" : "Closed";
 }
 
+function isOnchainSummary(value: unknown): value is OnchainTractionSummary {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return record.source === "onchain" && typeof record.generatedAt === "string";
+}
+
+function readStoredSummary(): OnchainTractionSummary | null {
+  try {
+    const raw = window.localStorage.getItem(SNAPSHOT_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return isOnchainSummary(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeSummary(summary: OnchainTractionSummary): void {
+  if (!summary.enabled) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(SNAPSHOT_STORAGE_KEY, JSON.stringify(summary));
+  } catch {
+    // Server cache is the source of truth; this only keeps repeat page visits instant.
+  }
+}
+
 export function TractionPanel() {
   const [summary, setSummary] = useState<OnchainTractionSummary>(emptySummary);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +111,7 @@ export function TractionPanel() {
           setLoading(false);
           setRefreshing(false);
           loadedOnceRef.current = true;
+          storeSummary(payload);
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -83,6 +122,13 @@ export function TractionPanel() {
         }
       }
     };
+
+    const storedSummary = readStoredSummary();
+    if (storedSummary) {
+      setSummary(storedSummary);
+      setLoading(false);
+      loadedOnceRef.current = true;
+    }
 
     void load();
     const interval = window.setInterval(() => {
@@ -96,6 +142,8 @@ export function TractionPanel() {
   }, []);
 
   const contractUrl = summary.contractAddress ? `${summary.explorerUrl}/address/${summary.contractAddress}` : "";
+  const value = (metric: string | number | null | undefined, fallback = "0") =>
+    loading ? "..." : (metric ?? fallback);
 
   return (
     <section className="panel-shell rounded-[1.8rem] px-5 py-5 sm:px-6">
@@ -106,8 +154,8 @@ export function TractionPanel() {
             Ink Contract Activity
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
-            Direct reads from the live arena sidecar: active bettors, repeat usage, confirmed bets, volume, and current
-            locked pool.
+            Direct reads from the live arena sidecar: active bettors, repeat usage, confirmed bets, and current epoch
+            state.
           </p>
         </div>
 
@@ -120,28 +168,22 @@ export function TractionPanel() {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="data-chip rounded-[6px] px-4 py-4">
           <p className="stat-label">24h Active Wallets</p>
-          <p className="agent-name mt-2 text-[1.8rem]">{summary.activeBettors24h}</p>
+          <p className="agent-name mt-2 text-[1.8rem]">{value(summary.activeBettors24h)}</p>
         </div>
         <div className="data-chip rounded-[6px] px-4 py-4">
           <p className="stat-label">24h Onchain Tx</p>
-          <p className="agent-name mt-2 text-[1.8rem]">{summary.bets24h}</p>
+          <p className="agent-name mt-2 text-[1.8rem]">{value(summary.bets24h)}</p>
         </div>
         <div className="data-chip rounded-[6px] px-4 py-4">
-          <p className="stat-label">24h Volume</p>
-          <p className="agent-name mt-2 text-[1.8rem]">{summary.volume24hEth}</p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-white/38">ETH</p>
+          <p className="stat-label">7d Active Wallets</p>
+          <p className="agent-name mt-2 text-[1.8rem]">{value(summary.activeBettors7d)}</p>
         </div>
         <div className="data-chip rounded-[6px] px-4 py-4">
           <p className="stat-label">7d Repeat Wallets</p>
-          <p className="agent-name mt-2 text-[1.8rem]">{summary.repeatBettors7d}</p>
-        </div>
-        <div className="data-chip rounded-[6px] px-4 py-4">
-          <p className="stat-label">Current TVL</p>
-          <p className="agent-name mt-2 text-[1.8rem]">{summary.currentEpochPoolEth}</p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-white/38">ETH locked</p>
+          <p className="agent-name mt-2 text-[1.8rem]">{value(summary.repeatBettors7d)}</p>
         </div>
       </div>
 
@@ -159,37 +201,30 @@ export function TractionPanel() {
                 Contract {shortAddress(summary.contractAddress)}
               </Link>
             ) : (
-              <span className="feature-badge">Contract unavailable</span>
+              <span className="feature-badge">{loading ? "Loading contract" : "Contract unavailable"}</span>
             )}
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="data-chip rounded-[6px] px-3 py-3">
               <p className="stat-label">Current Epoch</p>
-              <p className="stat-value mt-1">{summary.currentEpochId ?? "none"}</p>
+              <p className="stat-value mt-1">{value(summary.currentEpochId, "none")}</p>
             </div>
             <div className="data-chip rounded-[6px] px-3 py-3">
               <p className="stat-label">Epoch Status</p>
-              <p className="stat-value mt-1">{epochStatus(summary.currentEpochOpen)}</p>
+              <p className="stat-value mt-1">{loading ? "..." : epochStatus(summary.currentEpochOpen)}</p>
             </div>
             <div className="data-chip rounded-[6px] px-3 py-3">
               <p className="stat-label">Epoch Bettors</p>
-              <p className="stat-value mt-1">{summary.currentEpochBettors}</p>
-            </div>
-            <div className="data-chip rounded-[6px] px-3 py-3">
-              <p className="stat-label">7d Volume</p>
-              <p className="stat-value mt-1">{summary.volume7dEth} ETH</p>
+              <p className="stat-value mt-1">{value(summary.currentEpochBettors)}</p>
             </div>
             <div className="data-chip rounded-[6px] px-3 py-3">
               <p className="stat-label">7d Bets</p>
-              <p className="stat-value mt-1">{summary.bets7d}</p>
-            </div>
-            <div className="data-chip rounded-[6px] px-3 py-3">
-              <p className="stat-label">7d Active Wallets</p>
-              <p className="stat-value mt-1">{summary.activeBettors7d}</p>
+              <p className="stat-value mt-1">{value(summary.bets7d)}</p>
             </div>
           </div>
           <p className="mt-3 text-[11px] uppercase tracking-[0.12em] text-white/38">
-            Latest block {summary.latestBlock ?? "unknown"} · scanned from {summary.scannedFromBlock ?? "unknown"}
+            Latest block {value(summary.latestBlock, "unknown")} / scanned from{" "}
+            {value(summary.scannedFromBlock, "unknown")}
           </p>
         </div>
       </div>

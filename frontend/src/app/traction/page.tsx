@@ -13,7 +13,7 @@ export default function TractionPage() {
             <h1 className="section-title mt-2 text-white">Onchain Contract Traction</h1>
             <p className="subtitle mt-3 max-w-2xl text-sm leading-6 text-white/72 sm:text-base">
               Live Ink metrics pulled directly from the arena sidecar contract: active wallets, repeat usage, confirmed
-              bets, volume, and current locked pool.
+              bets, and current epoch state.
             </p>
           </div>
 

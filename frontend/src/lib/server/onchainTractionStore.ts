@@ -1,5 +1,9 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import type { Address, PublicClient } from "viem";
-import { createPublicClient, formatEther, parseAbiItem } from "viem";
+import { createPublicClient, parseAbiItem } from "viem";
 
 import {
   type ArenaNetworkId,
@@ -12,7 +16,6 @@ import {
   getArenaSidecarAddress,
   getArenaSidecarConfigError,
   getArenaSidecarCurrentEpochId,
-  getArenaSidecarEpochPool,
   isArenaSidecarEpochOpen,
 } from "@/lib/arenaSidecar";
 import type { OnchainTractionSummary } from "@/lib/onchainTractionTypes";
@@ -24,7 +27,7 @@ const BET_PLACED_EVENT = parseAbiItem(
 const CACHE_TTL_MS = 60_000;
 const DAY_SECONDS = 24 * 60 * 60;
 const WEEK_SECONDS = 7 * DAY_SECONDS;
-const DEFAULT_LOG_CHUNK_BLOCKS = 25_000n;
+const DEFAULT_LOG_CHUNK_BLOCKS = 100_000n;
 const MIN_LOG_CHUNK_BLOCKS = 1_000n;
 
 let cachedSummary:
@@ -35,6 +38,8 @@ let cachedSummary:
     }
   | null = null;
 
+const refreshPromises = new Map<string, Promise<void>>();
+
 type BetPlacedLog = Awaited<ReturnType<PublicClient["getLogs"]>>[number] & {
   args?: {
     epochId?: bigint;
@@ -44,6 +49,10 @@ type BetPlacedLog = Awaited<ReturnType<PublicClient["getLogs"]>>[number] & {
   };
   blockNumber?: bigint;
 };
+
+function getCacheFilePath(networkId: ArenaNetworkId): string {
+  return path.join(os.tmpdir(), `phonk-arena-onchain-traction-${networkId}.json`);
+}
 
 function readPositiveBigIntEnv(name: string, fallback: bigint): bigint {
   const raw = process.env[name]?.trim();
@@ -57,18 +66,6 @@ function readPositiveBigIntEnv(name: string, fallback: bigint): bigint {
   } catch {
     return fallback;
   }
-}
-
-function formatEthAmount(value: bigint): string {
-  const numeric = Number(formatEther(value));
-
-  if (!Number.isFinite(numeric)) {
-    return formatEther(value);
-  }
-
-  return numeric.toLocaleString("en-US", {
-    maximumFractionDigits: 8,
-  });
 }
 
 function emptySummary(networkId: ArenaNetworkId, error?: string): OnchainTractionSummary {
@@ -98,6 +95,45 @@ function emptySummary(networkId: ArenaNetworkId, error?: string): OnchainTractio
     recentBets: [],
     error,
   };
+}
+
+function isCachedSummary(value: unknown): value is OnchainTractionSummary {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return record.source === "onchain" && typeof record.generatedAt === "string";
+}
+
+async function readPersistedSummary(networkId: ArenaNetworkId): Promise<OnchainTractionSummary | null> {
+  try {
+    const raw = await fs.readFile(getCacheFilePath(networkId), "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+
+    return isCachedSummary(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function persistSummary(networkId: ArenaNetworkId, summary: OnchainTractionSummary): Promise<void> {
+  try {
+    await fs.writeFile(getCacheFilePath(networkId), `${JSON.stringify(summary)}\n`, "utf8");
+  } catch {
+    // The dashboard can still use in-memory cache if the deployment filesystem is read-only.
+  }
+}
+
+function rememberSummary(networkId: ArenaNetworkId, cacheKey: string, summary: OnchainTractionSummary): void {
+  cachedSummary = {
+    cacheKey,
+    createdAt: Date.now(),
+    summary,
+  };
+
+  void persistSummary(networkId, summary);
 }
 
 async function findBlockAtOrBeforeTimestamp(
@@ -158,10 +194,6 @@ async function getBetPlacedLogs(
   return logs;
 }
 
-function sumBetAmounts(logs: BetPlacedLog[]): bigint {
-  return logs.reduce((total, log) => total + (log.args?.amount ?? 0n), 0n);
-}
-
 function uniqueBettors(logs: BetPlacedLog[]): Set<string> {
   return new Set(logs.map((log) => log.args?.user?.toLowerCase()).filter((user): user is string => Boolean(user)));
 }
@@ -181,16 +213,7 @@ function repeatBettorCount(logs: BetPlacedLog[]): number {
   return [...counts.values()].filter((count) => count >= 2).length;
 }
 
-export async function getOnchainTractionSummary(
-  rawNetworkId?: string | null,
-): Promise<OnchainTractionSummary> {
-  const networkId = getArenaNetworkId(rawNetworkId ?? DEFAULT_ARENA_NETWORK_ID);
-  const cacheKey = networkId;
-
-  if (cachedSummary?.cacheKey === cacheKey && Date.now() - cachedSummary.createdAt < CACHE_TTL_MS) {
-    return cachedSummary.summary;
-  }
-
+async function buildOnchainTractionSummary(networkId: ArenaNetworkId): Promise<OnchainTractionSummary> {
   const configError = getArenaSidecarConfigError(networkId);
   if (configError) {
     return emptySummary(networkId, configError);
@@ -221,13 +244,10 @@ export async function getOnchainTractionSummary(
     const logs24h = logs7d.filter((log) => (log.blockNumber ?? 0n) >= from24hBlock);
 
     const currentEpochId = await getArenaSidecarCurrentEpochId(publicClient, networkId);
-    const [currentEpochOpen, currentEpochPool] =
+    const currentEpochOpen =
       currentEpochId === null
-        ? [null, null]
-        : await Promise.all([
-            isArenaSidecarEpochOpen(currentEpochId, publicClient, networkId),
-            getArenaSidecarEpochPool(currentEpochId, publicClient, networkId),
-          ]);
+        ? null
+        : await isArenaSidecarEpochOpen(currentEpochId, publicClient, networkId);
 
     const currentEpochLogs =
       currentEpochId === null
@@ -243,24 +263,18 @@ export async function getOnchainTractionSummary(
       contractAddress,
       currentEpochId: currentEpochId?.toString() ?? null,
       currentEpochOpen,
-      currentEpochPoolEth: formatEthAmount(currentEpochPool?.totalPool ?? sumBetAmounts(currentEpochLogs)),
+      currentEpochPoolEth: "0",
       currentEpochBettors: uniqueBettors(currentEpochLogs).size,
       bets24h: logs24h.length,
       activeBettors24h: uniqueBettors(logs24h).size,
-      volume24hEth: formatEthAmount(sumBetAmounts(logs24h)),
+      volume24hEth: "0",
       bets7d: logs7d.length,
       activeBettors7d: uniqueBettors(logs7d).size,
       repeatBettors7d: repeatBettorCount(logs7d),
-      volume7dEth: formatEthAmount(sumBetAmounts(logs7d)),
+      volume7dEth: "0",
       latestBlock: latestBlockNumber.toString(),
       scannedFromBlock: from7dBlock.toString(),
       recentBets: [],
-    };
-
-    cachedSummary = {
-      cacheKey,
-      createdAt: Date.now(),
-      summary,
     };
 
     return summary;
@@ -270,4 +284,56 @@ export async function getOnchainTractionSummary(
       error instanceof Error ? error.message : "Failed to read onchain traction metrics.",
     );
   }
+}
+
+function refreshSummaryInBackground(networkId: ArenaNetworkId, cacheKey: string): void {
+  if (refreshPromises.has(cacheKey)) {
+    return;
+  }
+
+  const refreshPromise = buildOnchainTractionSummary(networkId)
+    .then((summary) => {
+      if (summary.enabled) {
+        rememberSummary(networkId, cacheKey, summary);
+      }
+    })
+    .finally(() => {
+      refreshPromises.delete(cacheKey);
+    });
+
+  refreshPromises.set(cacheKey, refreshPromise);
+}
+
+export async function getOnchainTractionSummary(
+  rawNetworkId?: string | null,
+): Promise<OnchainTractionSummary> {
+  const networkId = getArenaNetworkId(rawNetworkId ?? DEFAULT_ARENA_NETWORK_ID);
+  const cacheKey = networkId;
+
+  if (cachedSummary?.cacheKey === cacheKey) {
+    if (Date.now() - cachedSummary.createdAt >= CACHE_TTL_MS) {
+      refreshSummaryInBackground(networkId, cacheKey);
+    }
+
+    return cachedSummary.summary;
+  }
+
+  const persistedSummary = await readPersistedSummary(networkId);
+  if (persistedSummary) {
+    cachedSummary = {
+      cacheKey,
+      createdAt: 0,
+      summary: persistedSummary,
+    };
+    refreshSummaryInBackground(networkId, cacheKey);
+
+    return persistedSummary;
+  }
+
+  const summary = await buildOnchainTractionSummary(networkId);
+  if (summary.enabled) {
+    rememberSummary(networkId, cacheKey, summary);
+  }
+
+  return summary;
 }
