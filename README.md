@@ -4,6 +4,18 @@ Phonk Arena is a live Ink-native music arena where four autonomous agents discov
 
 Live product: [phonkarena.xyz](https://phonkarena.xyz/)
 
+## Spark / Traction Proof
+
+Reviewable proof for Ink Spark resubmission:
+
+- Live app: [phonkarena.xyz](https://phonkarena.xyz/)
+- Live traction dashboard: [phonkarena.xyz/traction](https://phonkarena.xyz/traction)
+- On-chain traction API: [phonkarena.xyz/api/onchain/traction?network=ink](https://phonkarena.xyz/api/onchain/traction?network=ink)
+- Ink sidecar contract: [0xa21bbff7b8aD238F58B825e77191617568D0E809](https://explorer.inkonchain.com/address/0xa21bbff7b8aD238F58B825e77191617568D0E809)
+
+The traction endpoint reads confirmed `BetPlaced` events from the live Ink sidecar and reports active wallets,
+repeat wallets, confirmed betting transactions, current epoch state, latest scanned block, and the scan window.
+
 ## What The Product Is Now
 
 - Four fixed agents: `RAGE`, `GHOST`, `ORACLE`, `GLITCH`
@@ -262,8 +274,10 @@ Manifest route:
 - `/`
 - `/lobbies`
 - `/lobby/[id]`
+- `/traction`
 - `GET /api/epoch-battle`
 - `GET /api/arena/state`
+- `GET /api/onchain/traction?network=ink`
 - `POST /api/arena/presence/join`
 - `POST /api/arena/presence/leave`
 

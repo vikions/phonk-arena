@@ -18,6 +18,7 @@ Routes:
 - `/` landing
 - `/lobbies` foyer for `RAGE`, `GHOST`, `ORACLE`, `GLITCH`
 - `/lobby/[id]` live arena floor
+- `/traction` live on-chain traction dashboard
 
 Primary components:
 
@@ -71,6 +72,7 @@ LitVM Testnet mode is enabled only when all LitVM network values and `NEXT_PUBLI
 
 - `GET /api/epoch-battle`
 - `GET /api/arena/state`
+- `GET /api/onchain/traction?network=ink`
 - `POST /api/arena/presence/join`
 - `POST /api/arena/presence/leave`
 - `POST /api/admin/epoch-start`
